@@ -23,12 +23,32 @@
             text-align: center;
             font-size: 45px;
             margin-bottom:20px; /* Adjust this value to move it down */
-            width: 755;
+            width: 100%;
+            overflow: hidden; /* Prevent content overflow */
+            white-space: nowrap; /* Keep text in one line */
+        }
+         #header-text {
+            width: 90%;
+            height: 60px; /* Set a fixed height */
+            background-color: #2c2d59;
+            color: white;
+            border: none;
+            font-size: 45px; /* Initial font size */
+            text-align: center;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            resize: none; /* Prevent manual resizing */
+            overflow: hidden; /* Hide overflow to prevent scrollbars */
+            margin-top: 10px;
+            margin-left: 50px;
+            margin-bottom: -15px;
+            max-width: 650px;
+
         }
         .main-image {
             display: block;
             margin-bottom: -10px;
-            margin-top: 55px;
+            margin-top: 25px;
             max-width: 93%;
             max-height: 48%;
             margin-left: 28px;
@@ -40,6 +60,7 @@
         }
         .small-images img {
             max-width: 23.25%;
+            margin-bottom: 30px;
             cursor: pointer;
         }
         .hebrew-text, .english-text {
@@ -107,7 +128,7 @@
 
     <div class="container" id="presentation-slide">
         <div class="header">
-            <textarea id="header-text" class="textarea" placeholder="Enter Header Text" style="background-color: #2c2d59; color: white; border: none; font-size: 45px; text-align: center; width: 755px;"></textarea>
+            <textarea id="header-text" class="textarea" placeholder="Enter Header Text" style="font-size: 45px;"></textarea>
         </div>
         <img id="logo" class="logo" src="https://yonicohen87.github.io/windowPresentationTool/new%20logo.jpg">
         <img id="main-image" class="main-image" src="" alt="Main Image">
@@ -132,6 +153,43 @@
     <button class="btn" onclick="exportToImage()">Export as Image</button>
 
     <script>
+
+        function resizeHeaderText() {
+    const headerText = document.getElementById('header-text');
+    const maxFontSize = 45;  // Start with 45px
+    const minFontSize = 10;  // Minimum font size to prevent it from becoming too small
+    let currentFontSize = maxFontSize;
+    
+    // Reset font size to max size
+    headerText.style.fontSize = currentFontSize + 'px';
+
+    // Decrease the font size while the content overflows (either width or height)
+    while ((headerText.scrollWidth > headerText.clientWidth || headerText.scrollHeight > headerText.clientHeight) && currentFontSize > minFontSize) {
+        currentFontSize--;
+        headerText.style.fontSize = currentFontSize + 'px';
+    }
+        }
+        
+        // Attach resizeHeaderText function to the input event of the header textarea
+        document.getElementById('header-text').addEventListener('input', resizeHeaderText);
+        
+        // Initial call to resize the text in case of placeholder or initial content
+        resizeHeaderText();
+        
+        function autoResizeHeaderTextArea() {
+            const headerText = document.getElementById('header-text');
+            headerText.style.height = 'auto'; // Reset height to auto
+            headerText.style.height = headerText.scrollHeight + 'px'; // Adjust height to content
+        }
+        
+        // Call this function whenever text input is detected
+        document.getElementById('header-text').addEventListener('input', function() {
+            autoResizeHeaderTextArea();
+            resizeHeaderText();
+        });
+
+
+
         // Function to auto resize textarea based on content
         function autoResizeTextArea(textarea) {
             textarea.style.height = 'auto'; // Reset height
@@ -227,6 +285,9 @@
 
             setTimeout(() => {
                 html2canvas(container, {
+                    width: container.offsetWidth,
+                    height: container.offsetHeight,
+                    scale: window.devicePixelRatio,
                     backgroundColor: '#2c2d59',
                     scale: window.devicePixelRatio,
                     useCORS: true
@@ -238,7 +299,7 @@
                 }).catch(function (error) {
                     console.error('Error generating the canvas image:', error);
                 });
-            }, 100);  // Adjust the timeout if needed
+            }, 300);  // Adjust the timeout if needed
         }
 
         // Convert textareas into divs before exporting
@@ -253,13 +314,14 @@
 
                 // Adjust styles as needed
                 if (element.id === 'header-text') {
-                    div.style.marginBottom = '30px';
-                    div.style.marginTop = '20px';
+                    div.style.marginBottom = '-15px';
+                    div.style.marginTop = '10px';
                     div.style.textAlign = 'center';
-                    div.style.width = '100%';
-                    div.style.maxWidth = '650px';
-                    div.style.marginLeft = 'auto';
-                    div.style.marginRight = 'auto';
+                    div.style.width = '80%';
+                    div.style.maxWidth = '10px';
+                    div.style.marginLeft = '95px';
+                    div.style.marginRight = '110px';
+
                 } else if (element.id === 'hebrew-text' || element.id === 'english-text') {
                     div.style.marginTop = '20px';
                     div.style.marginBottom = '20px';
