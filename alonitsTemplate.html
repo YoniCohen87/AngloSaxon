@@ -22,14 +22,18 @@
         .header {
             text-align: center;
             font-size: 45px;
-            margin-bottom:20px; /* Adjust this value to move it down */
-            width: 100%;
+            margin-bottom:0px; /* Adjust this value to move it down */
+            width: 85%;
             overflow: hidden; /* Prevent content overflow */
             white-space: nowrap; /* Keep text in one line */
+    !        border: 1px solid white;
+            margin-left: 100px;
+            margin-top: 10px;
         }
          #header-text {
-            width: 90%;
+            width: 85%;
             height: 60px; /* Set a fixed height */
+            max-height: 60px;
             background-color: #2c2d59;
             color: white;
             border: none;
@@ -39,19 +43,20 @@
             word-wrap: break-word;
             resize: none; /* Prevent manual resizing */
             overflow: hidden; /* Hide overflow to prevent scrollbars */
-            margin-top: 10px;
-            margin-left: 50px;
-            margin-bottom: -15px;
-            max-width: 650px;
+            margin-top: 3px;
+            margin-left: 3px;
+            margin-bottom: -10px;
+            max-width: 700px;
 
         }
         .main-image {
             display: block;
             margin-bottom: -10px;
-            margin-top: 25px;
-            max-width: 93%;
+            margin-top: 50px;
+            max-width: 95%;
             max-height: 48%;
-            margin-left: 28px;
+            margin-left: 19px;
+            border: 1px solid yellow ;
         }
         .small-images {
             display: flex;
@@ -59,30 +64,32 @@
             margin: 10px 0;
         }
         .small-images img {
-            max-width: 23.25%;
-            margin-bottom: 30px;
+            max-width: 31.5%;
+            margin-bottom: 5px;
             cursor: pointer;
+            border: 1px solid yellow ;
         }
         .hebrew-text, .english-text {
             margin: 20px 0;
+
        }
         .logo {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 70px;
+            top: 15px;
+            left: 15px;
+            width: 85px;
         }
         .agent-image {
             position: absolute;
             bottom: 10px;
             left: 10px;
-            width: 66px;
+            width: 90px;
 
         }
         .contact-details {
             position: absolute;
             bottom: 20px;
-            left: 140px;
+            left: 20px;
             width: 260px;
             margin-left: -40px;
         }
@@ -100,16 +107,28 @@
         }
         .textarea {
             width: 100%;
+            max-width: 80%; /* Set max width for the textarea */
+            max-height: 200px; /* Set a max height */
             background-color: #2c2d59;
             color: white;
-            border: none;
+!            border: 1px solid; white;
             resize: none;
-            font-size: 24px;
+            font-size: 20px;
             text-align: center; /* Default to center */
             overflow-wrap: break-word; /* Prevent text overflow */
             word-wrap: break-word; /* Ensures text will wrap */
             box-sizing: border-box; /* Ensure padding and border are included in the element's width/height */
             height: auto;
+            max-width: 80%;
+            margin-left: 150px; /* Move both text boxes to the right */
+            overflow: hidden; /* Hide the scrollbar */
+        }
+       .hebrew-text textarea, .english-text textarea {
+            max-width: 80%;  /* Adjust width as needed */
+            height: auto;
+            max-height: 200px; /* Control the maximum height */
+            font-size: 20px; /* Initial font size */
+            overflow: hidden; /* Hide scrollbars */
         }
         .hebrew-text textarea {
             text-align: right;
@@ -121,6 +140,10 @@
         .contact-details textarea {
             font-size: 10px; /* Smaller font for contact details */
             text-align: left; /* Left-to-right for contact text */
+           width: 100%; /* Ensure the width is constrained to the contact-details container */
+            margin-left: 140px; /* Remove any left margin */
+            border: none;
+            overflow: hidden; /* Ensure no scrollbar */
         }
     </style>
 </head>
@@ -147,7 +170,7 @@
         </div>
     </div>
 
-    <input type="file" id="upload-images" accept="image/*" multiple> Upload Images (Max 5)<br>
+    <input type="file" id="upload-images" accept="image/*" multiple> Upload Images (Max 4)<br>
     <input type="file" id="upload-agent-image" accept="image/*"> Upload Agent Image<br>
 
     <button class="btn" onclick="exportToImage()">Export as Image</button>
@@ -188,6 +211,30 @@
             resizeHeaderText();
         });
 
+        function adjustFontSize(textarea) {
+            let maxFontSize;
+            let minFontSize;
+            
+            if (textarea.id === 'contact-details') {
+                // Set smaller font size range for contact details
+                maxFontSize = 10;
+                minFontSize = 8;
+            } else {
+                // Larger font size for Hebrew and English text
+                maxFontSize = 40;
+                minFontSize = 20;
+        }
+
+            let fontSize = maxFontSize;
+
+                textarea.style.fontSize = fontSize + "px"; // Reset font size
+
+            // Reduce the font size if the content overflows the text area
+            while ((textarea.scrollHeight > textarea.clientHeight || textarea.scrollWidth > textarea.clientWidth) && fontSize > minFontSize) {
+                fontSize--;
+                textarea.style.fontSize = fontSize + "px";
+            }
+        }
 
 
         // Function to auto resize textarea based on content
@@ -203,11 +250,14 @@
 
         textareas.forEach(textarea => {
             textarea.addEventListener('input', function() {
+                adjustFontSize(this); // Adjust font size
                 autoResizeTextArea(this);
             });
 
             // Initial resize to adjust to placeholder content
             autoResizeTextArea(textarea);
+            adjustFontSize(textarea);
+            
         });
 
         document.getElementById('upload-images').addEventListener('change', function(event) {
@@ -314,24 +364,27 @@
 
                 // Adjust styles as needed
                 if (element.id === 'header-text') {
-                    div.style.marginBottom = '-15px';
-                    div.style.marginTop = '10px';
+                    div.style.marginBottom = '-10px';
+                    div.style.marginTop = '2px';
                     div.style.textAlign = 'center';
-                    div.style.width = '80%';
-                    div.style.maxWidth = '10px';
-                    div.style.marginLeft = '95px';
+                    div.style.width = '128%';
+                    div.style.maxWidth = '640px';
+                    div.style.marginLeft = '3px';
                     div.style.marginRight = '110px';
 
-                } else if (element.id === 'hebrew-text' || element.id === 'english-text') {
-                    div.style.marginTop = '20px';
-                    div.style.marginBottom = '20px';
-                }
-
+                } 
+                else if (element.id === 'hebrew-text') {
+                   // Ensure RTL is applied to the Hebrew div
+                   div.style.direction = 'rtl';
+                   div.style.textAlign = 'right';
+               } else if (element.id === 'english-text') {
+                   div.style.textAlign = 'left'; // English remains LTR
+               }
                 if (element.id === 'contact-details') {
-                    div.style.fontSize = '12px';
+                    div.style.fontSize = '10px';
                     div.style.textAlign = 'left';
                     div.style.width = '500px';
-                    div.style.maxWidth = '120%';
+                    div.style.maxWidth = '95%';
                 }
 
                 element.parentNode.replaceChild(div, element);
