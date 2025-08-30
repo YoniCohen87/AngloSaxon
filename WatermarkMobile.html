@@ -2,11 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1, viewport-fit=cover"
-  />
-  <title>Watermark Studio — Mobile Friendly</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Watermark Studio — Mobile + Zoom (No Slider)</title>
   <style>
     :root{
       --bg:#0b0d12; --panel:#131722; --muted:#8b9bb3; --text:#e6edf6;
@@ -16,12 +13,14 @@
     }
     *{ box-sizing:border-box; }
     html,body{ height:100%; margin:0; }
+    /* Prevent horizontal overflow (fixes preview getting cut off) */
+    html, body { overflow-x: hidden; }
     body{
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       background: linear-gradient(180deg,#0b0d12 0%,#101521 100%);
       color:var(--text);
-      height:100svh; /* mobile-friendly dvh; fallback set below */
-      overflow:hidden;
+      height:100svh;
+      overflow:hidden; /* vertical scroll handled inside columns */
     }
     @supports not (height:100svh){ body{ height:100vh; } }
 
@@ -32,13 +31,15 @@
       position:sticky; top:0; backdrop-filter: blur(6px);
       display:grid; grid-template-columns: 1fr auto; gap:12px; align-items:center;
       z-index:10;
+      min-width:0; max-width:100%;
     }
     header h1{ font-size:18px; margin:0; font-weight:700; letter-spacing:.2px; }
     header .sub{ color:var(--muted); font-size:12px; margin-top:2px; }
     .head-left{ display:flex; flex-direction:column; gap:2px; min-width:0; }
     .head-actions{
       display:flex; gap:8px; align-items:center;
-      overflow:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px;
+      overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; padding-bottom:2px;
+      min-width:0; max-width:100%;
     }
     .note{ color:var(--muted); font-size:12px; margin-left:4px; white-space:nowrap; }
 
@@ -54,10 +55,9 @@
     .btn:hover:not(:disabled){ filter:brightness(1.05); transform:translateY(-1px); }
     .btn:active{ transform:translateY(0); }
 
-    /* Tabs visible only on small screens */
+    /* Tabs (mobile only) */
     .mobile-tabs{
-      display:none; grid-column:1 / -1; margin-top:6px;
-      gap:8px;
+      display:none; grid-column:1 / -1; margin-top:6px; gap:8px; max-width:100%;
     }
     .tab{
       flex:1 1 0; text-align:center; border-radius:999px; padding:8px 12px; font-weight:700;
@@ -68,24 +68,23 @@
     .wrap{
       display:grid; grid-template-columns: 340px 1fr; gap:16px; padding:12px;
       height: calc(100svh - var(--headH) - var(--safe-bottom));
-      overflow:hidden; min-height:0;
+      overflow:hidden; min-height:0; width:100%; max-width:100%;
     }
     @supports not (height:100svh){
       .wrap{ height: calc(100vh - var(--headH)); }
     }
-    .col{ display:flex; flex-direction:column; min-height:0; height:100%; }
+    .col{ display:flex; flex-direction:column; min-height:0; height:100%; min-width:0; }
     .col.controls-panel{ overflow:hidden; }
     .controls-scroll{
       height:100%; min-height:0; overflow:auto; -webkit-overflow-scrolling:touch;
       scrollbar-gutter: stable both-edges; padding-right:6px;
     }
 
-    .card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:12px; }
+    .card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:12px; max-width:100%; }
     .card h2, .card summary{
       font-size:14px; letter-spacing:.3px; margin:0; padding:12px 14px;
       border-bottom:1px solid var(--border); color:#c9d5ea; list-style:none; cursor:default;
     }
-    /* Collapsible cards using <details> on mobile */
     details.card > summary{ cursor:pointer; }
     details.card[open] > summary{ border-bottom:1px solid var(--border); }
     .card .body{ padding:12px; display:flex; flex-direction:column; gap:12px; }
@@ -104,9 +103,34 @@
     }
     input[type="checkbox"]{ transform: translateY(2px); width:18px; height:18px; }
 
-    .preview{ position:relative; background:#0a0f1c; border:1px solid var(--border);
-      border-radius:14px; height:100%; display:grid; place-items:center; overflow:auto; min-height:260px; }
-    canvas{ max-width:100%; max-height:100%; background:#0a0f1c; image-rendering: optimizeQuality; }
+    /* Preview: containment + padding to avoid cutoffs */
+    .preview{
+      position:relative; background:#0a0f1c; border:1px solid var(--border);
+      border-radius:14px; height:100%; overflow:auto; min-height:260px;
+      padding:8px; contain: layout paint; isolation:isolate;
+      touch-action: none; max-width:100%;
+    }
+    canvas{
+      max-width:none; max-height:none; background:#0a0f1c; image-rendering: optimizeQuality;
+      transform-origin: top left; touch-action: none; display:block;
+    }
+
+    /* Zoom toolbar (buttons only) */
+    .zoombar{
+      position:sticky; top:8px; left:0; display:flex; align-items:center; justify-content:flex-end;
+      gap:6px; padding:0 8px; pointer-events:none; z-index:2; flex-wrap:wrap;
+    }
+    .zoombar .zbtn{
+      pointer-events:auto; background:rgba(10,15,28,.85); border:1px solid var(--border);
+      border-radius:10px; padding:8px 10px; font-weight:700; cursor:pointer; min-height:36px;
+      color:#e6edf6;
+    }
+
+    .zoom-readout{
+      position:sticky; top:8px; left:8px; pointer-events:none; font-size:12px; color:#9fb0ca;
+      background:rgba(10,15,28,.7); border:1px solid var(--border); border-radius:8px; padding:6px 8px;
+      display:inline-block;
+    }
 
     .thumbs{
       display:grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap:8px; max-height:28vh; overflow:auto;
@@ -123,11 +147,11 @@
     .template-row{ display:grid; grid-template-columns: 1fr auto auto auto auto; gap:8px; align-items:center; }
     .muted{ color:var(--muted); font-size:12px; }
 
-    /* Mobile layout */
     @media (max-width:980px){
       header{ grid-template-columns: 1fr; }
-      .head-actions{ order:3; flex-wrap:nowrap; }
-      .note{ display:none; } /* keeps header compact */
+      .head-actions{ order:3; flex-wrap:wrap; overflow:visible; row-gap:8px; }
+      .head-actions .btn{ flex:1 1 calc(50% - 8px); }
+      .note{ display:none; }
 
       .mobile-tabs{ display:flex; }
       .wrap{ grid-template-columns: 1fr; height: calc(100svh - var(--headH) - var(--safe-bottom)); }
@@ -138,22 +162,17 @@
       .pane{ display:none; min-height:0; }
       .pane.active{ display:flex; }
 
-      /* Collapsible sections default */
       details.card.photos,
-      details.card.templates{ /* start collapsed on small screens */
-        overflow:hidden;
-      }
+      details.card.templates{ overflow:hidden; }
       details.card.photos:not([open]) .body,
       details.card.templates:not([open]) .body{ display:none; }
 
-      /* Thumbs become a horizontal scroller */
       .thumbs{
         display:flex; gap:8px; overflow:auto; max-height:none; padding-bottom:2px;
       }
       .thumb{ flex:0 0 120px; }
     }
 
-    /* Scrollbar styling for side panel */
     .controls-scroll::-webkit-scrollbar{ width:10px; height:10px; }
     .controls-scroll::-webkit-scrollbar-thumb{ background:#2a3955; border-radius:8px; }
     .controls-scroll::-webkit-scrollbar-track{ background:#0b1020; }
@@ -166,7 +185,6 @@
       <div class="sub">Drag & drop your logo and photos • Add text • Position, tilt, and save templates</div>
     </div>
 
-    <!-- Actions tray (scrollable on mobile) -->
     <div class="head-actions">
       <button class="btn" id="btn-export">Download Current</button>
       <button class="btn primary" id="btn-export-all">Process All as ZIP</button>
@@ -179,7 +197,6 @@
       <span class="note" id="dir-note"></span>
     </div>
 
-    <!-- Mobile tabs -->
     <div class="mobile-tabs" role="tablist" aria-label="View switch">
       <button class="tab active" id="tab-preview" aria-selected="true">Preview</button>
       <button class="tab" id="tab-controls" aria-selected="false">Controls</button>
@@ -341,8 +358,18 @@
         <h2>Preview</h2>
         <div class="body" style="height: calc(100% - 44px);">
           <div class="preview" id="preview">
+            <!-- Zoom UI overlay (no slider) -->
+            <div class="zoombar" id="zoombar">
+              <button class="zbtn" id="zoom-out" title="Zoom out (Ctrl/⌘ + scroll)">−</button>
+              <button class="zbtn" id="zoom-in"  title="Zoom in (Ctrl/⌘ + scroll)">+</button>
+              <button class="zbtn" id="zoom-fit" title="Fit to screen">Fit</button>
+              <button class="zbtn" id="zoom-100" title="Actual size">100%</button>
+            </div>
+            <div class="zoom-readout" id="zoom-readout">100%</div>
+
             <canvas id="canvas"></canvas>
           </div>
+
           <div class="row">
             <div class="muted">Format</div>
             <select id="format">
@@ -360,7 +387,7 @@
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
   <script>
-    /* Header height calibration for perfect viewport fit */
+    /* Header height calibration */
     (function calibrateHeader() {
       const header = document.getElementById('appHeader');
       const set = () => {
@@ -373,7 +400,7 @@
       window.addEventListener('resize', set);
     })();
 
-    /* Simple mobile tab switch */
+    /* Mobile tab switch */
     (function tabs(){
       const tabPrev = document.getElementById('tab-preview');
       const tabCtrl = document.getElementById('tab-controls');
@@ -385,7 +412,6 @@
         tabPrev.classList.toggle('active', isPrev);
         tabPrev.setAttribute('aria-selected', isPrev);
         panePrev.classList.toggle('active', isPrev);
-
         tabCtrl.classList.toggle('active', !isPrev);
         tabCtrl.setAttribute('aria-selected', !isPrev);
         paneCtrl.classList.toggle('active', !isPrev);
@@ -394,7 +420,6 @@
       tabPrev?.addEventListener('click', () => activate('preview'));
       tabCtrl?.addEventListener('click', () => activate('controls'));
 
-      // On desktop, always show both; on mobile default to preview
       const mm = window.matchMedia('(max-width: 980px)');
       const handle = () => {
         if (mm.matches) activate('preview');
@@ -410,21 +435,24 @@
       photos: [], // {name, img}
       currentIndex: -1,
       settings: { scalePct: 25, opacity: 0.7, anchor: 'bottom-center', offsetX: 0, offsetY: -20 },
-      drag:   { enabled: true, active: false, dx:0, dy:0 }, // logo
+      drag:   { enabled: true, active: false, dx:0, dy:0, id:null }, // logo
       text:   {
         value: '', fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial",
         sizePx: 48, color: '#ffffff', opacity: 0.7, rotDeg: 0,
         anchor: 'center', offsetX: 0, offsetY: 0,
-        dragEnabled: true, drag: { active:false, dx:0, dy:0 }
+        dragEnabled: true, drag: { active:false, dx:0, dy:0, id:null }
       },
       outDir: null, outDirName: '',
+      zoom: 1, zoomMode: 'fit' // 'fit' | 'manual'
     };
 
     // --- Elements ---
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
     const previewEl = document.getElementById('preview');
+    const zoomReadout = document.getElementById('zoom-readout');
 
+    // Inputs
     const logoDrop = document.getElementById('logo-drop');
     const logoInput = document.getElementById('logo-input');
     const photoDrop = document.getElementById('photo-drop');
@@ -462,6 +490,12 @@
     const txtOffXEl  = document.getElementById('txt-offx');
     const txtOffYEl  = document.getElementById('txt-offy');
 
+    // Zoom buttons
+    const zIn = document.getElementById('zoom-in');
+    const zOut = document.getElementById('zoom-out');
+    const zFit = document.getElementById('zoom-fit');
+    const z100 = document.getElementById('zoom-100');
+
     // --- Helpers ---
     function readAsImage(file){
       return new Promise((resolve, reject) => {
@@ -477,7 +511,15 @@
       });
     }
 
-    /* Canvas placement helpers */
+    /* rAF drawing for smooth pointer interactions */
+    let rafPending = false;
+    function scheduleDraw(){
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => { rafPending = false; draw(); });
+    }
+
+    /* Canvas placement */
     function logoDims(){
       if (!state.logoImg || !state.photos[state.currentIndex]) return { w:0, h:0 };
       const targetW = canvas.width * (state.settings.scalePct / 100);
@@ -533,16 +575,41 @@
       return { x: base.x + Number(state.text.offsetX||0), y: base.y + Number(state.text.offsetY||0) };
     }
 
+    /* Zoom handling */
+    function computeFitZoom(){
+      if (!canvas.width || !canvas.height) return 1;
+      const pad = 16; // align with .preview padding and borders
+      const availW = Math.max(100, previewEl.clientWidth - pad);
+      const availH = Math.max(100, previewEl.clientHeight - pad);
+      return Math.min(availW / canvas.width, availH / canvas.height);
+    }
+    function applyZoom(){
+      if (state.zoomMode === 'fit') state.zoom = computeFitZoom();
+      canvas.style.transform = `scale(${state.zoom})`;
+      zoomReadout.textContent = `${Math.round(state.zoom*100)}%`;
+    }
+    function setZoom(z, mode='manual'){
+      state.zoom = Math.min(8, Math.max(0.05, z));
+      state.zoomMode = mode;
+      applyZoom();
+    }
+    function zoomStep(dir){ // dir: +1 or -1
+      const step = dir > 0 ? 1.1 : 1/1.1;
+      setZoom(state.zoom * step, 'manual');
+    }
+    new ResizeObserver(() => { if (state.zoomMode==='fit') applyZoom(); }).observe(previewEl);
+
+    /* Drawing */
     function draw(){
       const photo = state.photos[state.currentIndex];
       ctx.clearRect(0,0,canvas.width,canvas.height);
-      if (!photo) return;
+      if (!photo) { applyZoom(); return; }
 
       canvas.width = photo.img.naturalWidth;
       canvas.height = photo.img.naturalHeight;
+
       ctx.drawImage(photo.img, 0, 0);
 
-      // Logo
       if (state.logoImg){
         const { w, h } = logoDims();
         const p = logoPos();
@@ -551,7 +618,6 @@
         ctx.globalAlpha = 1;
       }
 
-      // Text
       if (state.text.value){
         const p = textPos();
         const t = state.text;
@@ -565,9 +631,11 @@
         ctx.fillText(t.value, 0, 0);
         ctx.restore();
       }
+
+      applyZoom();
     }
 
-    function setCurrent(index){ state.currentIndex = index; draw(); }
+    function setCurrent(index){ state.currentIndex = index; scheduleDraw(); }
 
     function refreshThumbs(){
       thumbs.innerHTML = '';
@@ -591,7 +659,7 @@
       } else if (state.currentIndex >= state.photos.length){
         state.currentIndex = state.photos.length - 1;
       }
-      refreshThumbs(); draw();
+      refreshThumbs(); scheduleDraw();
     }
 
     function bindDropzone(zoneEl, inputEl, onFiles){
@@ -615,7 +683,7 @@
     bindDropzone(logoDrop, logoInput, async files => {
       const f = files[0];
       const { img } = await readAsImage(f);
-      state.logoImg = img; draw();
+      state.logoImg = img; scheduleDraw();
     });
 
     bindDropzone(photoDrop, photoInput, async files => {
@@ -623,35 +691,35 @@
         const { img, name } = await readAsImage(f);
         state.photos.push({ img, name });
       }
-      refreshThumbs(); draw();
+      refreshThumbs(); scheduleDraw();
     });
 
     // Controls — logo
-    scaleEl.addEventListener('input', () => { state.settings.scalePct = Number(scaleEl.value); draw(); });
-    opacityEl.addEventListener('input', () => { state.settings.opacity = Number(opacityEl.value)/100; draw(); });
-    anchorEl.addEventListener('change', () => { state.settings.anchor = anchorEl.value; draw(); });
-    offsetXEl.addEventListener('input', () => { state.settings.offsetX = Number(offsetXEl.value||0); draw(); });
-    offsetYEl.addEventListener('input', () => { state.settings.offsetY = Number(offsetYEl.value||0); draw(); });
+    scaleEl.addEventListener('input', () => { state.settings.scalePct = Number(scaleEl.value); scheduleDraw(); });
+    opacityEl.addEventListener('input', () => { state.settings.opacity = Number(opacityEl.value)/100; scheduleDraw(); });
+    anchorEl.addEventListener('change', () => { state.settings.anchor = anchorEl.value; scheduleDraw(); });
+    offsetXEl.addEventListener('input', () => { state.settings.offsetX = Number(offsetXEl.value||0); scheduleDraw(); });
+    offsetYEl.addEventListener('input', () => { state.settings.offsetY = Number(offsetYEl.value||0); scheduleDraw(); });
     dragToggle.addEventListener('change', () => { state.drag.enabled = dragToggle.checked; });
 
     // Controls — text
-    txtTextEl.addEventListener('input', () => { state.text.value = txtTextEl.value; draw(); });
-    txtFontEl.addEventListener('change', () => { state.text.fontFamily = txtFontEl.value; draw(); });
-    txtSizeEl.addEventListener('input', () => { state.text.sizePx = Math.max(6, Number(txtSizeEl.value||0)); draw(); });
-    txtColorEl.addEventListener('input', () => { state.text.color = txtColorEl.value; draw(); });
-    txtOpacityEl.addEventListener('input', () => { state.text.opacity = Number(txtOpacityEl.value)/100; draw(); });
-    txtRotEl.addEventListener('input', () => { state.text.rotDeg = Number(txtRotEl.value); draw(); });
+    txtTextEl.addEventListener('input', () => { state.text.value = txtTextEl.value; scheduleDraw(); });
+    txtFontEl.addEventListener('change', () => { state.text.fontFamily = txtFontEl.value; scheduleDraw(); });
+    txtSizeEl.addEventListener('input', () => { state.text.sizePx = Math.max(6, Number(txtSizeEl.value||0)); scheduleDraw(); });
+    txtColorEl.addEventListener('input', () => { state.text.color = txtColorEl.value; scheduleDraw(); });
+    txtOpacityEl.addEventListener('input', () => { state.text.opacity = Number(txtOpacityEl.value)/100; scheduleDraw(); });
+    txtRotEl.addEventListener('input', () => { state.text.rotDeg = Number(txtRotEl.value); scheduleDraw(); });
 
-    txtAnchorEl.addEventListener('change', () => { state.text.anchor = txtAnchorEl.value; draw(); });
-    txtOffXEl.addEventListener('input', () => { state.text.offsetX = Number(txtOffXEl.value||0); draw(); });
-    txtOffYEl.addEventListener('input', () => { state.text.offsetY = Number(txtOffYEl.value||0); draw(); });
+    txtAnchorEl.addEventListener('change', () => { state.text.anchor = txtAnchorEl.value; scheduleDraw(); });
+    txtOffXEl.addEventListener('input', () => { state.text.offsetX = Number(txtOffXEl.value||0); scheduleDraw(); });
+    txtOffYEl.addEventListener('input', () => { state.text.offsetY = Number(txtOffYEl.value||0); scheduleDraw(); });
 
     txtDragToggle.addEventListener('change', () => { state.text.dragEnabled = txtDragToggle.checked; });
-    resetTiltBtn.addEventListener('click', () => { state.text.rotDeg = 0; txtRotEl.value = 0; draw(); });
+    resetTiltBtn.addEventListener('click', () => { state.text.rotDeg = 0; txtRotEl.value = 0; scheduleDraw(); });
 
     removeCurrentBtn.addEventListener('click', () => { if (state.currentIndex !== -1) removePhotoAt(state.currentIndex); });
 
-    /* Pointer -> canvas coords (touch/zoom safe) */
+    /* Pointer -> canvas coords (zoom-aware) */
     function getPointerCanvasXY(e){
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
@@ -674,18 +742,27 @@
     function pointInRect(x,y,r){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; }
 
     let dragTarget = null; // 'text' | 'logo'
+    let lastTapTime = 0;
 
-    previewEl.addEventListener('pointerdown', (e) => {
+    // Smooth, mobile-friendly dragging (pointer capture + rAF)
+    canvas.addEventListener('pointerdown', (e) => {
       if (state.currentIndex === -1) return;
+      const now = Date.now();
+      if (now - lastTapTime < 300){ zoomStep(+1); lastTapTime = 0; return; } // double-tap zoom in
+      lastTapTime = now;
+
       e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+
       const { x, y } = getPointerCanvasXY(e);
 
       // Text first
       const tr = measureTextRectForHit();
       if (state.text.dragEnabled && tr && pointInRect(x,y,tr)){
         dragTarget = 'text';
-        const p = textPos();
         state.text.drag.active = true;
+        state.text.drag.id = e.pointerId;
+        const p = textPos();
         state.text.drag.dx = x - p.x;
         state.text.drag.dy = y - p.y;
         return;
@@ -699,14 +776,17 @@
         if (pointInRect(x,y,r)){
           dragTarget = 'logo';
           state.drag.active = true;
+          state.drag.id = e.pointerId;
           state.drag.dx = x - p.x;
           state.drag.dy = y - p.y;
         }
       }
-    });
+    }, { passive:false });
 
-    window.addEventListener('pointermove', (e) => {
+    canvas.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== state.drag.id && e.pointerId !== state.text.drag.id) return;
       if (dragTarget === 'text' && state.text.drag.active){
+        e.preventDefault();
         const { x, y } = getPointerCanvasXY(e);
         const newX = Math.round(x - state.text.drag.dx);
         const newY = Math.round(y - state.text.drag.dy);
@@ -715,8 +795,9 @@
         state.text.offsetY = newY - base.y;
         txtOffXEl.value = state.text.offsetX;
         txtOffYEl.value = state.text.offsetY;
-        draw();
+        scheduleDraw();
       } else if (dragTarget === 'logo' && state.drag.active){
+        e.preventDefault();
         const { x, y } = getPointerCanvasXY(e);
         const newX = Math.round(x - state.drag.dx);
         const newY = Math.round(y - state.drag.dy);
@@ -725,16 +806,34 @@
         state.settings.offsetY = newY - base.y;
         offsetXEl.value = state.settings.offsetX;
         offsetYEl.value = state.settings.offsetY;
-        draw();
+        scheduleDraw();
       }
-    });
-    window.addEventListener('pointerup', () => {
-      dragTarget = null;
-      state.drag.active = false;
-      state.text.drag.active = false;
-    });
+    }, { passive:false });
 
-    /* Classic downloads */
+    function endDrag(){
+      dragTarget = null;
+      state.drag.active = false; state.drag.id = null;
+      state.text.drag.active = false; state.text.drag.id = null;
+    }
+    canvas.addEventListener('pointerup',   endDrag, { passive:true });
+    canvas.addEventListener('pointercancel', endDrag, { passive:true });
+    canvas.addEventListener('lostpointercapture', endDrag, { passive:true });
+
+    /* Scroll-to-zoom: Ctrl/⌘ + wheel */
+    previewEl.addEventListener('wheel', (e) => {
+      if (e.ctrlKey || e.metaKey){
+        e.preventDefault();
+        if (e.deltaY < 0) zoomStep(+1); else zoomStep(-1);
+      }
+    }, { passive:false });
+
+    /* Zoom buttons */
+    zIn.addEventListener('click',  () => zoomStep(+1));
+    zOut.addEventListener('click', () => zoomStep(-1));
+    zFit.addEventListener('click', () => setZoom(computeFitZoom(), 'fit'));
+    z100.addEventListener('click', () => setZoom(1, 'manual'));
+
+    /* Downloads */
     function downloadCurrent(){
       const photo = state.photos[state.currentIndex];
       if (!photo) return alert('Add a photo first.');
@@ -757,7 +856,8 @@
       const zip = new JSZip();
       const mime = formatEl.value;
       for (let i=0;i<state.photos.length;i++){
-        setCurrent(i); draw();
+        setCurrent(i);
+        await new Promise(r => requestAnimationFrame(r));
         const blob = await new Promise(res => canvas.toBlob(res, mime, mime === 'image/jpeg' ? 0.92 : undefined));
         const base = state.photos[i].name.replace(/\.[^.]+$/, '');
         const name = `${base}_watermarked${mime==='image/png'?'.png':'.jpg'}`;
@@ -858,7 +958,8 @@
       if (!state.photos.length) return alert('Add some photos first.');
       const mime = formatEl.value;
       for (let i=0;i<state.photos.length;i++){
-        setCurrent(i); draw();
+        setCurrent(i);
+        await new Promise(r => requestAnimationFrame(r));
         const base = state.photos[i].name.replace(/\.[^.]+$/, '');
         const ext = mime === 'image/png' ? '.png' : '.jpg';
         const fileName = `${base}_watermarked${ext}`;
@@ -903,7 +1004,7 @@
     function restoreStateFromTpl(tpl){
       state.settings = { ...state.settings, ...tpl.settings };
       if (tpl.text) state.text = { ...state.text, ...tpl.text };
-      syncControls(); draw();
+      syncControls(); scheduleDraw();
     }
     function deleteTemplate(name){
       if (!confirm(`Delete template "${name}"?`)) return;
@@ -993,6 +1094,7 @@
     // Init
     renderTplList();
     syncControls();
+    setZoom(1, 'fit'); // start in "Fit" mode
   </script>
 </body>
 </html>
