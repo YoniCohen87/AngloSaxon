@@ -122,7 +122,7 @@
 
     label{ font-size:12px; color:var(--muted); }
     input[type="range"], select, input[type="number"], input[type="text"], input[type="color"]{
-      width:100%; background:#0b1020; color:#0bd; color:var(--text); border:1px solid var(--border);
+      width:100%; background:#0b1020; color:var(--text); border:1px solid var(--border);
       border-radius:10px; padding:10px; min-height:44px;
     }
     input[type="checkbox"]{ transform: translateY(2px); width:18px; height:18px; }
@@ -133,7 +133,7 @@
     }
     .thumb{ position:relative; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#0b1020; }
     .thumb img{ display:block; width:100%; height:70px; object-fit:cover; }
-    .thumb .name{ font-size:10px; color:#9fb0ca; color:var(--muted); padding:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .thumb .name{ font-size:10px; color:var(--muted); padding:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .thumb .pick,.thumb .trash{
       position:absolute; top:6px; background:rgba(0,0,0,.5); border:1px solid var(--border);
       padding:4px 8px; border-radius:999px; font-size:11px; cursor:pointer; min-height:28px;
@@ -149,20 +149,22 @@
       position:relative; background:#0a0f1c; border:1px solid var(--border);
       border-radius:14px; height:100%; overflow:auto; min-height:260px;
       padding:8px; contain: layout paint; isolation:isolate;
-      touch-action: none; max-width:100%;
+      touch-action: none; overscroll-behavior: contain; /* keep drag smooth on mobile */
+      max-width:100%;
     }
     canvas{
       max-width:none; max-height:none; background:#0a0f1c; image-rendering: optimizeQuality;
       transform-origin: top left; touch-action: none; display:block;
     }
 
-    /* FIX: allow clicks on zoom controls */
+    /* Zoom bar: capture clicks only on buttons, pass-through elsewhere */
     .zoombar{
       position:sticky; top:8px; left:0; display:flex; align-items:center; justify-content:flex-end;
-      gap:6px; padding:0 8px; /* pointer-events: none;  <-- removed */
+      gap:6px; padding:0 8px; pointer-events:none; /* important */
       z-index:2; flex-wrap:wrap;
     }
     .zoombar .zbtn{
+      pointer-events:auto; /* allow clicks on buttons */
       background:rgba(10,15,28,.85); border:1px solid var(--border);
       border-radius:10px; padding:8px 10px; font-weight:700; cursor:pointer; min-height:36px;
       color:#e6edf6;
@@ -748,17 +750,93 @@
       refreshPhotoThumbs(); raf(draw);
     });
 
+    // ---------- Pointer interactions (drag) ----------
+    function getPointerCanvasXY(e){
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+    }
+    function measureTextRectForHit(){
+      if (!state.text.value) return null;
+      const tctx = document.createElement('canvas').getContext('2d');
+      tctx.font = `${state.text.sizePx}px ${state.text.fontFamily}`;
+      const w = Math.ceil(tctx.measureText(state.text.value).width);
+      const h = state.text.sizePx;
+      const p = getTextAbs();
+      const rad = (state.text.rotDeg||0) * Math.PI/180;
+      const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
+      return { x:p.x, y:p.y, w:Math.ceil(w*cos + h*sin), h:Math.ceil(w*sin + h*cos) };
+    }
+    function pointInRect(x,y,r){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; }
+
+    let dragTarget = null; // 'text' | 'logo'
+    let lastTapTime = 0;
+
+    canvas.addEventListener('pointerdown', (e) => {
+      if (state.currentIndex === -1) return;
+      const now = Date.now();
+      if (now - lastTapTime < 300){ const step = 1.1; setZoom(state.zoom * step, 'manual'); lastTapTime = 0; return; }
+      lastTapTime = now;
+
+      e.preventDefault();
+
+      const { x, y } = getPointerCanvasXY(e);
+
+      const tr = measureTextRectForHit();
+      if (state.text.dragEnabled && tr && pointInRect(x,y,tr)){
+        dragTarget = 'text';
+        state.text.drag.active = true;
+        state.text.drag.id = e.pointerId;
+        const p = getTextAbs();
+        state.text.drag.dx = x - p.x;
+        state.text.drag.dy = y - p.y;
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+
+      if (state.drag.enabled && state.logoImg){
+        const { w, h } = logoDims();
+        const p = getLogoAbs();
+        const r = { x:p.x, y:p.y, w, h };
+        if (pointInRect(x,y,r)){
+          dragTarget = 'logo';
+          state.drag.active = true;
+          state.drag.id = e.pointerId;
+          state.drag.dx = x - p.x;
+          state.drag.dy = y - p.y;
+          canvas.setPointerCapture(e.pointerId);
+        }
+      }
+    }, { passive:false });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== state.drag.id && e.pointerId !== state.text.drag.id) return;
+      const { x, y } = getPointerCanvasXY(e);
+      if (dragTarget === 'text' && state.text.drag.active){
+        e.preventDefault();
+        setTextAbs(Math.round(x - state.text.drag.dx), Math.round(y - state.text.drag.dy));
+      } else if (dragTarget === 'logo' && state.drag.active){
+        e.preventDefault();
+        setLogoAbs(Math.round(x - state.drag.dx), Math.round(y - state.drag.dy));
+      }
+    }, { passive:false });
+
+    function endDrag(){
+      dragTarget = null;
+      state.drag.active = false; state.drag.id = null;
+      state.text.drag.active = false; state.text.drag.id = null;
+    }
+    canvas.addEventListener('pointerup', endDrag, { passive:true });
+    canvas.addEventListener('pointercancel', endDrag, { passive:true });
+    canvas.addEventListener('lostpointercapture', endDrag, { passive:true });
+
     // ---------- Controls — Logo ----------
     scaleEl.addEventListener('input', () => { state.settings.scalePct = Number(scaleEl.value); raf(draw); });
     opacityEl.addEventListener('input', () => { state.settings.opacity = Number(opacityEl.value)/100; raf(draw); });
-
-    // Anchor change: snap to selected anchor (offsets = 0)
     anchorEl.addEventListener('change', () => setLogoAnchorSnap(anchorEl.value));
-
-    // Offsets
     offsetXEl.addEventListener('input', () => { state.settings.offsetX = Number(offsetXEl.value||0); raf(draw); });
     offsetYEl.addEventListener('input', () => { state.settings.offsetY = Number(offsetYEl.value||0); raf(draw); });
-
     dragToggle.addEventListener('change', () => { state.drag.enabled = dragToggle.checked; });
 
     // ---------- Controls — Text ----------
@@ -768,11 +846,9 @@
     txtColorEl.addEventListener('input', () => { state.text.color = txtColorEl.value; raf(draw); });
     txtOpacityEl.addEventListener('input', () => { state.text.opacity = Number(txtOpacityEl.value)/100; raf(draw); });
     txtRotEl.addEventListener('input', () => { state.text.rotDeg = Number(txtRotEl.value); raf(draw); });
-
     txtAnchorEl.addEventListener('change', () => setTextAnchorSnap(txtAnchorEl.value));
     txtOffXEl.addEventListener('input', () => { state.text.offsetX = Number(txtOffXEl.value||0); raf(draw); });
     txtOffYEl.addEventListener('input', () => { state.text.offsetY = Number(txtOffYEl.value||0); raf(draw); });
-
     txtDragToggle.addEventListener('change', () => { state.text.dragEnabled = txtDragToggle.checked; });
     resetTiltBtn.addEventListener('click', () => { state.text.rotDeg = 0; txtRotEl.value = 0; raf(draw); });
 
