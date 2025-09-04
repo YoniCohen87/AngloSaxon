@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Watermark Studio — Native Pan + Seamless Zoom</title>
+  <title>Watermark Studio — Smooth Drag + Robust Template I/O</title>
   <style>
     :root{
       --bg:#0b0d12; --panel:#131722; --muted:#8b9bb3; --text:#e6edf6;
@@ -87,11 +87,7 @@
     details.card[open] > summary{ border-bottom:1px solid var(--border); }
     .card .body{ padding:12px; display:flex; flex-direction:column; gap:12px; }
 
-    /* Preview:
-       - Fixed height so page doesn’t grow
-       - Canvas absolutely positioned (doesn't expand layout)
-       - Native scroll/pan inside when zoomed
-    */
+    /* Preview: fixed height; native pan when zoomed */
     .preview{
       position:relative;
       background:#0a0f1c; border:1px solid var(--border); border-radius:14px;
@@ -99,7 +95,6 @@
       min-height: 320px;
       padding:8px;
       contain: layout paint; isolation:isolate;
-      /* allow native panning/scrolling on touch */
       touch-action: pan-x pan-y;
       overscroll-behavior: contain;
       max-width:100%;
@@ -110,13 +105,10 @@
       top:0; left:0;
       max-width:none; max-height:none; background:#0a0f1c; image-rendering: optimizeQuality;
       transform-origin: top left;
-      /* Prevent thin black seam artifacts while scaling */
       backface-visibility: hidden;
       will-change: transform;
       display:block;
-      /* initial transform; JS will update scale() but we keep translateZ(0) */
       transform: translateZ(0) scale(1);
-      /* allow default gestures (so scrolling works when not dragging) */
       touch-action: auto;
     }
 
@@ -483,7 +475,7 @@
     // ---------- Elements ----------
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
-    ctx.imageSmoothingEnabled = true; // keep quality when exporting/drawing
+    ctx.imageSmoothingEnabled = true;
 
     const previewEl = document.getElementById('preview');
     const zoomReadout = document.getElementById('zoom-readout');
@@ -547,7 +539,7 @@
       });
     }
 
-    // ----- Geometry (LOGO) -----
+    // ---------- Geometry (LOGO) ----------
     function logoDims(){
       if (!state.logoImg || !state.photos[state.currentIndex]) return { w:0, h:0 };
       const targetW = canvas.width * (state.settings.scalePct / 100);
@@ -590,7 +582,7 @@
       raf(draw);
     }
 
-    // ----- Geometry (TEXT) -----
+    // ---------- Geometry (TEXT) ----------
     function measureTextSize(){
       const tctx = document.createElement('canvas').getContext('2d');
       tctx.font = `${state.text.sizePx}px ${state.text.fontFamily}`;
@@ -628,34 +620,33 @@
     }
     function applyZoom(){
       if (state.zoomMode === 'fit') state.zoom = computeFitZoom();
-      // Snap zoom to 1/100th to avoid subpixel transform seams
-      const z = Math.round(state.zoom * 100) / 100;
+      const z = Math.round(state.zoom * 100) / 100; // avoid tile seams
       canvas.style.transform = `translateZ(0) scale(${z})`;
       zoomReadout.textContent = `${Math.round(z*100)}%`;
     }
     function setZoom(z, mode='manual'){
-      // clamp and set mode
       state.zoom = Math.min(8, Math.max(0.05, z));
       state.zoomMode = mode;
       applyZoom();
     }
-    function zoomStep(dir){
-      const step = dir > 0 ? 1.1 : 1/1.1;
-      setZoom(state.zoom * step, 'manual');
-    }
+    function zoomStep(dir){ const step = dir > 0 ? 1.1 : 1/1.1; setZoom(state.zoom * step, 'manual'); }
     new ResizeObserver(() => { if (state.zoomMode==='fit') applyZoom(); }).observe(previewEl);
 
-    // ---------- Drawing ----------
+    // ---------- Drawing / performance ----------
+    function ensureCanvasSize(w, h){
+      if (canvas.width !== w || canvas.height !== h){
+        canvas.width = w; canvas.height = h;
+      }
+    }
     function draw(){
       const photo = state.photos[state.currentIndex];
       ctx.clearRect(0,0,canvas.width,canvas.height);
       if (!photo) { applyZoom(); return; }
 
-      // Set drawing buffer to photo’s native size (layout unaffected)
-      canvas.width = photo.img.naturalWidth;
-      canvas.height = photo.img.naturalHeight;
+      // Resize only when necessary (huge perf win while dragging)
+      ensureCanvasSize(photo.img.naturalWidth, photo.img.naturalHeight);
 
-      // Draw base photo
+      // Base photo
       ctx.globalCompositeOperation = 'source-over';
       ctx.drawImage(photo.img, 0, 0);
 
@@ -686,7 +677,7 @@
       applyZoom();
     }
 
-    function setCurrent(index){ state.currentIndex = index; raf(draw); }
+    function setCurrent(index){ state.currentIndex = index; const p = state.photos[index]; if (p) ensureCanvasSize(p.img.naturalWidth, p.img.naturalHeight); raf(draw); }
 
     // ---------- Thumbnails ----------
     function refreshPhotoThumbs(){
@@ -793,7 +784,7 @@
       if (now - lastTapTime < 300){
         const step = 1.1; setZoom(state.zoom * step, 'manual');
         lastTapTime = 0;
-        return; // allow native scroll otherwise
+        return;
       }
       lastTapTime = now;
 
@@ -802,7 +793,7 @@
       // TEXT drag?
       const tr = measureTextRectForHit();
       if (state.text.dragEnabled && tr && pointInRect(x,y,tr)){
-        e.preventDefault(); // only block scrolling when drag starts
+        e.preventDefault();
         dragTarget = 'text';
         state.text.drag.active = true;
         state.text.drag.id = e.pointerId;
@@ -810,6 +801,10 @@
         state.text.drag.dx = x - p.x;
         state.text.drag.dy = y - p.y;
         canvas.setPointerCapture(e.pointerId);
+        // lock scroll while dragging for smoother motion
+        previewEl.dataset.prevOverflow = previewEl.style.overflow || '';
+        previewEl.style.overflow = 'hidden';
+        canvas.style.touchAction = 'none';
         return;
       }
 
@@ -819,13 +814,16 @@
         const p = getLogoAbs();
         const r = { x:p.x, y:p.y, w, h };
         if (pointInRect(x,y,r)){
-          e.preventDefault(); // only here too
+          e.preventDefault();
           dragTarget = 'logo';
           state.drag.active = true;
           state.drag.id = e.pointerId;
           state.drag.dx = x - p.x;
           state.drag.dy = y - p.y;
           canvas.setPointerCapture(e.pointerId);
+          previewEl.dataset.prevOverflow = previewEl.style.overflow || '';
+          previewEl.style.overflow = 'hidden';
+          canvas.style.touchAction = 'none';
         }
       }
     }, { passive:false });
@@ -846,6 +844,10 @@
       dragTarget = null;
       state.drag.active = false; state.drag.id = null;
       state.text.drag.active = false; state.text.drag.id = null;
+      // restore scroll/gesture
+      canvas.style.touchAction = 'auto';
+      previewEl.style.overflow = previewEl.dataset.prevOverflow || '';
+      delete previewEl.dataset.prevOverflow;
     }
     canvas.addEventListener('pointerup', endDrag, { passive:true });
     canvas.addEventListener('pointercancel', endDrag, { passive:true });
@@ -897,11 +899,15 @@
         canvas.toBlob((blob) => {
           if (!blob) return;
           const ext = mime === 'image/png' ? 'png' : 'jpg';
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = `${name}_watermarked.${ext}`;
-          a.click();
-          URL.revokeObjectURL(a.href);
+          try{
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `${name}_watermarked.${ext}`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+          }catch{
+            saveAs(blob, `${name}_watermarked.${ext}`);
+          }
         }, mime, mime === 'image/jpeg' ? 0.92 : undefined);
       });
     }
@@ -920,18 +926,16 @@
         zip.file(name, blob);
       }
       const out = await zip.generateAsync({ type:'blob' });
-      if ('showSaveFilePicker' in window){
-        try{
-          const handle = await window.showSaveFilePicker({
-            suggestedName:'watermarked_photos.zip',
-            types:[{ description:'ZIP Archive', accept:{'application/zip':['.zip']} }]
-          });
-          const writable = await handle.createWritable();
-          await writable.write(out); await writable.close();
-          return;
-        }catch(e){ /* cancelled */ }
+      try{
+        const handle = await window.showSaveFilePicker({
+          suggestedName:'watermarked_photos.zip',
+          types:[{ description:'ZIP Archive', accept:{'application/zip':['.zip']} }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(out); await writable.close();
+      }catch(e){
+        saveAs(out, 'watermarked_photos.zip');
       }
-      saveAs(out, 'watermarked_photos.zip');
     }
 
     document.getElementById('btn-export').addEventListener('click', downloadCurrent);
@@ -945,7 +949,6 @@
       saveAllToDirBtn.disabled = !on;
       dirNote.textContent = on ? `Saving to: ${state.outDirName}` :
         (fsSupported() ? 'Pick a folder to save images there.' : 'Folder saving not supported in this browser.');
-      document.getElementById('actions-details').style.display = fsSupported() ? '' : '';
     }
     async function ensureDirPermission(){
       if (!state.outDir) return false;
@@ -1011,6 +1014,175 @@
     document.getElementById('btn-save-all-to-dir').addEventListener('click', saveAllToDir);
     updateDirUI();
 
+    // ---------- Templates (save / import / export) ----------
+    const LS_KEY = 'wm_templates_v4';
+    function getTemplates(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch{ return []; } }
+    function setTemplates(list){ localStorage.setItem(LS_KEY, JSON.stringify(list)); }
+
+    function serializeTemplate(name){
+      // keep only stable fields
+      const { scalePct, opacity, anchor, offsetX, offsetY } = state.settings;
+      const text = {
+        value: state.text.value,
+        fontFamily: state.text.fontFamily,
+        sizePx: state.text.sizePx,
+        color: state.text.color,
+        opacity: state.text.opacity,
+        rotDeg: state.text.rotDeg,
+        anchor: state.text.anchor,
+        offsetX: state.text.offsetX,
+        offsetY: state.text.offsetY,
+        dragEnabled: state.text.dragEnabled
+      };
+      let logoDataUrl = null;
+      if (state.logoImg){
+        try{
+          const tmp = document.createElement('canvas');
+          tmp.width = state.logoImg.naturalWidth; tmp.height = state.logoImg.naturalHeight;
+          tmp.getContext('2d').drawImage(state.logoImg, 0, 0);
+          logoDataUrl = tmp.toDataURL('image/png');
+        }catch(e){
+          // if tainted, skip embedding; user can re-add logo
+          logoDataUrl = null;
+        }
+      }
+      return { name, settings:{ scalePct, opacity, anchor, offsetX, offsetY }, logo:{ dataUrl:logoDataUrl }, text, createdAt:Date.now(), version:4 };
+    }
+
+    function saveTemplate(name){
+      if (!name){ alert('Enter a template name.'); return; }
+      const tpl = serializeTemplate(name);
+      const list = getTemplates().filter(t => t.name !== name);
+      list.unshift(tpl); setTemplates(list); renderTplList(); alert('Template saved.');
+    }
+
+    function applyTemplate(tpl){
+      // allow old versions (v3)
+      const tset = tpl.settings || {};
+      state.settings = {
+        ...state.settings,
+        scalePct: Number(tset.scalePct ?? state.settings.scalePct),
+        opacity: Number(tset.opacity ?? state.settings.opacity),
+        anchor: tset.anchor ?? state.settings.anchor,
+        offsetX: Number(tset.offsetX ?? state.settings.offsetX),
+        offsetY: Number(tset.offsetY ?? state.settings.offsetY)
+      };
+      if (tpl.text){
+        const tt = tpl.text;
+        state.text = {
+          ...state.text,
+          value: tt.value ?? state.text.value,
+          fontFamily: tt.fontFamily ?? state.text.fontFamily,
+          sizePx: Number(tt.sizePx ?? state.text.sizePx),
+          color: tt.color ?? state.text.color,
+          opacity: Number(tt.opacity ?? state.text.opacity),
+          rotDeg: Number(tt.rotDeg ?? state.text.rotDeg),
+          anchor: tt.anchor ?? state.text.anchor,
+          offsetX: Number(tt.offsetX ?? state.text.offsetX),
+          offsetY: Number(tt.offsetY ?? state.text.offsetY),
+          dragEnabled: Boolean(tt.dragEnabled ?? state.text.dragEnabled)
+        };
+      }
+      if (tpl.logo && tpl.logo.dataUrl){
+        const img = new Image();
+        img.onload = () => { state.logoImg = img; state.logoName = 'Logo'; renderLogoThumb(); raf(draw); };
+        img.src = tpl.logo.dataUrl;
+      }else{
+        // keep existing logo if any; user can clear if desired
+      }
+      syncControls(); raf(draw);
+    }
+
+    function deleteTemplate(name){
+      if (!confirm(`Delete template "${name}"?`)) return;
+      const list = getTemplates().filter(t => t.name !== name);
+      setTemplates(list); renderTplList();
+    }
+
+    function renderTplList(){
+      const list = getTemplates();
+      const tplListEl = document.getElementById('tpl-list');
+      tplListEl.innerHTML = '';
+      if (!list.length){
+        const p = document.createElement('div'); p.className='muted'; p.textContent='No templates yet.';
+        tplListEl.appendChild(p); return;
+      }
+      list.forEach(t => {
+        const row = document.createElement('div');
+        row.className = 'template-row';
+        const op = t.settings?.opacity != null ? Math.round(t.settings.opacity*100) : '';
+        row.innerHTML = `
+          <div>
+            <div style="font-size:12px; font-weight:700;">${t.name}</div>
+            <div class="muted" style="font-size:10px;">
+              Scale ${t.settings?.scalePct ?? '?'}% · Logo ${op}% · ${t.settings?.anchor ?? '?'}${t.text?.value ? ' · Text ✓' : ''}
+            </div>
+          </div>
+          <button class="btn" data-act="load">Load</button>
+          <button class="btn" data-act="rename">Rename</button>
+          <button class="btn" data-act="export">Export</button>
+          <button class="btn warn" data-act="delete">Delete</button>
+        `;
+        row.querySelector('[data-act="load"]').onclick = () => applyTemplate(t);
+        row.querySelector('[data-act="delete"]').onclick = () => deleteTemplate(t.name);
+        row.querySelector('[data-act="rename"]').onclick = () => {
+          const nn = prompt('New name', t.name); if (!nn) return;
+          const list2 = getTemplates(); const idx = list2.findIndex(x => x.name === t.name);
+          if (idx >= 0){ list2[idx].name = nn; setTemplates(list2); renderTplList(); }
+        };
+        row.querySelector('[data-act="export"]').onclick = () => {
+          try{
+            const blob = new Blob([JSON.stringify(t, null, 2)], { type:'application/json' });
+            // prefer native anchor, fallback to FileSaver
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `${t.name || 'template'}.json`; a.click();
+            URL.revokeObjectURL(url);
+          }catch{
+            const blob = new Blob([JSON.stringify(t, null, 2)], { type:'application/json' });
+            saveAs(blob, `${t.name || 'template'}.json`);
+          }
+        };
+        tplListEl.appendChild(row);
+      });
+    }
+
+    document.getElementById('btn-save-tpl').addEventListener('click', () => saveTemplate(document.getElementById('tpl-name').value.trim()));
+
+    document.getElementById('btn-export-tpl').addEventListener('click', () => {
+      const name = document.getElementById('tpl-name').value.trim() || 'template';
+      try{
+        const blob = new Blob([JSON.stringify(serializeTemplate(name), null, 2)], { type:'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${name}.json`; a.click();
+        URL.revokeObjectURL(url);
+      }catch{
+        const blob = new Blob([JSON.stringify(serializeTemplate(name), null, 2)], { type:'application/json' });
+        saveAs(blob, `${name}.json`);
+      }
+    });
+
+    document.getElementById('btn-import-tpl').addEventListener('click', () => document.getElementById('tpl-import-input').click());
+    document.getElementById('tpl-import-input').addEventListener('change', () => {
+      const f = document.getElementById('tpl-import-input').files[0]; if (!f) return;
+      const fr = new FileReader();
+      fr.onload = () => {
+        try{
+          const parsed = JSON.parse(fr.result);
+          if (!parsed || typeof parsed !== 'object' || !parsed.settings){
+            throw new Error('Not a valid template file.');
+          }
+          const list = getTemplates().filter(t => t.name !== parsed.name);
+          list.unshift(parsed); setTemplates(list); renderTplList(); applyTemplate(parsed);
+        }catch(e){ alert('Failed to import template: ' + (e?.message || e)); }
+      };
+      fr.onerror = () => alert('Failed to read file.');
+      fr.readAsText(f);
+      document.getElementById('tpl-import-input').value='';
+    });
+
+    // ---------- Sync UI ----------
     function syncControls(){
       scaleEl.value = state.settings.scalePct;
       opacityEl.value = Math.round(state.settings.opacity * 100);
@@ -1034,6 +1206,7 @@
     (function init(){
       renderLogoThumb();
       refreshPhotoThumbs();
+      renderTplList();
       syncControls();
       setZoom(1, 'fit');
     })();
