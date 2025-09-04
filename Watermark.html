@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Watermark Studio — Fixed Preview Viewport</title>
+  <title>Watermark Studio — Fixed Preview Height + Sticky Format</title>
   <style>
     :root{
       --bg:#0b0d12; --panel:#131722; --muted:#8b9bb3; --text:#e6edf6;
       --accent:#7aa2f7; --border:#273042; --headH:66px;
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --shadow-grad: linear-gradient(180deg, rgba(11,13,18,0.9), rgba(11,13,18,0));
     }
     *{ box-sizing:border-box; }
     html,body{ margin:0; }
@@ -37,6 +38,7 @@
     header .sub{ color:var(--muted); font-size:12px; margin-top:2px; }
     .head-left{ display:flex; flex-direction:column; gap:2px; min-width:0; }
 
+    /* Actions (expandable) */
     details.actions-card{
       border:1px solid var(--border); border-radius:12px;
       background:rgba(19,23,34,0.5);
@@ -76,7 +78,7 @@
     }
 
     .col{ display:flex; flex-direction:column; min-width:0; }
-    .controls-scroll{ padding-right:6px; }
+    .controls-scroll{ padding-right: 6px; }
 
     .card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:12px; max-width:100%; }
     .card summary, .card h2{
@@ -87,25 +89,54 @@
     details.card[open] > summary{ border-bottom:1px solid var(--border); }
     .card .body{ padding:12px; display:flex; flex-direction:column; gap:12px; }
 
-    /* Fixed-height preview viewport to prevent page stretching */
+    /* PREVIEW
+       - Fixed height so page doesn't get tall
+       - Canvas absolutely positioned so it doesn't affect layout size
+       - Internal scroll only when image/zoom exceeds the viewport of the preview
+    */
     .preview{
-      position:relative; background:#0a0f1c; border:1px solid var(--border);
-      border-radius:14px;
-      height: clamp(320px, 52vh, 68vh); /* fits on phones, roomy on desktop */
-      padding:8px; contain: layout paint; isolation:isolate;
+      position:relative;
+      background:#0a0f1c; border:1px solid var(--border); border-radius:14px;
+      height: 60vh;        /* <<< keeps the card stable */
+      min-height: 320px;
+      padding:8px;
+      contain: layout paint; isolation:isolate;
       touch-action: none; overscroll-behavior: contain;
       max-width:100%;
-      overflow:auto; /* only this area scrolls when zoom > fit */
+      overflow:auto;       /* scroll inside when needed */
     }
 
-    /* Canvas: layout size is controlled via style width/height (no transform) */
-    canvas{
+    /* Scroll shadows for discoverability */
+    .preview::before,
+    .preview::after{
+      content:"";
+      position:sticky;
       display:block;
-      background:#0a0f1c;
-      image-rendering: optimizeQuality;
-      /* width/height set in JS by applyZoom() */
+      height:14px;
+      pointer-events:none;
+      z-index:3;
+    }
+    .preview::before{
+      top:8px;
+      background: linear-gradient(180deg, rgba(10,15,28,0.9), rgba(10,15,28,0));
+      opacity:0; transition:opacity .15s ease;
+    }
+    .preview::after{
+      bottom:8px;
+      background: linear-gradient(0deg, rgba(10,15,28,0.9), rgba(10,15,28,0));
+      opacity:0; transition:opacity .15s ease;
+    }
+    .preview.has-scroll-top::before{ opacity:1; }
+    .preview.has-scroll-bottom::after{ opacity:1; }
+
+    canvas{
+      position:absolute;    /* <<< key fix: remove from document flow */
+      top:0; left:0;
+      max-width:none; max-height:none; background:#0a0f1c; image-rendering: optimizeQuality;
+      transform-origin: top left; touch-action: none; display:block;
     }
 
+    /* Zoom UI */
     .zoombar{
       position:sticky; top:8px; left:0; display:flex; align-items:center; justify-content:flex-end;
       gap:6px; padding:0 8px; pointer-events:none;
@@ -123,11 +154,12 @@
       display:inline-block;
     }
 
+    /* Sticky footer keeps Format visible without scrolling way down */
     .sticky-footer{
       position: sticky;
       bottom: max(8px, var(--safe-bottom));
       z-index: 3;
-      background: linear-gradient(180deg, rgba(19,23,34,0.0) 0%, rgba(19,23,34,0.8) 35%, rgba(19,23,34,0.95) 100%);
+      background: linear-gradient(180deg, rgba(19,23,34,0.0) 0%, rgba(19,23,34,0.85) 35%, rgba(19,23,34,0.95) 100%);
       padding: 10px 12px;
       margin-top: 10px;
       border: 1px solid var(--border);
@@ -137,15 +169,18 @@
     .sticky-footer .row{ display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; }
     .sticky-footer .muted{ color:#c9d5ea; font-weight:700; }
 
-    label{ font-size:12px; color:var(--muted); }
+    /* Inputs */
     .row{ display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; }
     .controls{ display:grid; gap:10px; }
+
+    label{ font-size:12px; color:var(--muted); }
     input[type="range"], select, input[type="number"], input[type="text"], input[type="color"]{
-      width:100%; background:#0b1020; color:#fff; border:1px solid var(--border);
+      width:100%; background:#0b1020; color:#e6edf6; border:1px solid var(--border);
       border-radius:10px; padding:10px; min-height:44px;
     }
     input[type="checkbox"]{ transform: translateY(2px); width:18px; height:18px; }
 
+    /* Dropzones */
     .drop{
       background:#0f1421; border:2px dashed #2a3955; border-radius:12px;
       padding:14px; text-align:center; color:var(--muted);
@@ -155,18 +190,20 @@
     .drop:hover{ border-color:var(--accent); color:#cbd6ea; }
     .drop.dragover{ background:#0b1220; border-color:#a6da95; }
 
+    /* Thumbnails */
     .thumbs{
       display:grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap:8px;
     }
     .thumb{ position:relative; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#0b1020; }
     .thumb img{ display:block; width:100%; height:70px; object-fit:cover; }
-    .thumb .name{ font-size:10px; color:var(--muted); padding:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .thumb .name{ font-size:10px; color:#8b9bb3; padding:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .thumb .pick,.thumb .trash{
       position:absolute; top:6px; background:rgba(0,0,0,.5); border:1px solid var(--border);
       padding:4px 8px; border-radius:999px; font-size:11px; cursor:pointer; min-height:28px;
     }
     .thumb .pick{ right:6px; } .thumb .trash{ left:6px; }
 
+    /* Logo thumb 15% smaller */
     #logo-thumbs .thumb img{ height:60px; }
     #logo-thumbs .thumb .name{ font-size:9px; }
 
@@ -185,7 +222,7 @@
         display:flex; gap:8px; overflow:auto; padding-bottom:2px;
       }
       .thumb{ flex:0 0 120px; }
-      .preview{ height: clamp(320px, 48vh, 60vh); } /* a touch shorter on phones */
+      .preview{ height: 45vh; } /* slightly smaller on phones */
     }
   </style>
 </head>
@@ -371,7 +408,7 @@
     </div>
 
     <!-- RIGHT: PREVIEW -->
-    <div class="col pane active" id="pane-preview" aria-labelledby="tab-preview">
+    <div class="col pane" id="pane-preview" aria-labelledby="tab-preview">
       <div class="card">
         <h2>Preview</h2>
         <div class="body">
@@ -386,6 +423,7 @@
             <canvas id="canvas"></canvas>
           </div>
 
+          <!-- Sticky footer: always reachable, no long page scroll -->
           <div class="sticky-footer">
             <div class="row">
               <div class="muted">Format</div>
@@ -603,7 +641,7 @@
     function setTextAbs(x, y){ const b = textBasePos(); state.text.offsetX = Math.round(x - b.x); state.text.offsetY = Math.round(y - b.y); txtOffXEl.value = state.text.offsetX; txtOffYEl.value = state.text.offsetY; raf(draw); }
     function setTextAnchorSnap(newAnchor){ state.text.anchor = newAnchor; state.text.offsetX = 0; state.text.offsetY = 0; txtOffXEl.value = 0; txtOffYEl.value = 0; raf(draw); }
 
-    // ---------- Zoom (CSS size, not transform) ----------
+    // ---------- Zoom ----------
     function computeFitZoom(){
       if (!canvas.width || !canvas.height) return 1;
       const pad = 16;
@@ -612,22 +650,14 @@
       return Math.min(availW / canvas.width, availH / canvas.height);
     }
     function applyZoom(){
-      if (!canvas.width || !canvas.height){
-        canvas.style.width = '0px';
-        canvas.style.height = '0px';
-        zoomReadout.textContent = '100%';
-        return;
-      }
       if (state.zoomMode === 'fit') state.zoom = computeFitZoom();
-      const cssW = Math.max(1, Math.round(canvas.width  * state.zoom));
-      const cssH = Math.max(1, Math.round(canvas.height * state.zoom));
-      canvas.style.width  = cssW + 'px';
-      canvas.style.height = cssH + 'px';
+      canvas.style.transform = `scale(${state.zoom})`; // visual only
       zoomReadout.textContent = `${Math.round(state.zoom*100)}%`;
+      updateScrollShadows();
     }
     function setZoom(z, mode='manual'){ state.zoom = Math.min(8, Math.max(0.05, z)); state.zoomMode = mode; applyZoom(); }
     function zoomStep(dir){ const step = dir > 0 ? 1.1 : 1/1.1; setZoom(state.zoom * step, 'manual'); }
-    new ResizeObserver(() => { if (state.zoomMode==='fit') applyZoom(); }).observe(previewEl);
+    new ResizeObserver(() => { if (state.zoomMode==='fit') applyZoom(); else updateScrollShadows(); }).observe(previewEl);
 
     // ---------- Drawing ----------
     function draw(){
@@ -635,7 +665,7 @@
       ctx.clearRect(0,0,canvas.width,canvas.height);
       if (!photo) { applyZoom(); return; }
 
-      // Render at native resolution; CSS size is controlled by applyZoom()
+      // Set drawing buffer to the photo’s native size (does NOT affect layout anymore)
       canvas.width = photo.img.naturalWidth;
       canvas.height = photo.img.naturalHeight;
 
@@ -667,6 +697,16 @@
     }
 
     function setCurrent(index){ state.currentIndex = index; raf(draw); }
+
+    // ---------- Scroll shadow indicators ----------
+    function updateScrollShadows(){
+      const el = previewEl;
+      const top = el.scrollTop;
+      const max = el.scrollHeight - el.clientHeight - 1;
+      el.classList.toggle('has-scroll-top', top > 2);
+      el.classList.toggle('has-scroll-bottom', top < max);
+    }
+    previewEl.addEventListener('scroll', updateScrollShadows, { passive:true });
 
     // ---------- Thumbnails ----------
     function refreshPhotoThumbs(){
@@ -704,7 +744,6 @@
       state.photos.splice(i,1);
       if (!state.photos.length){
         state.currentIndex = -1; ctx.clearRect(0,0,canvas.width,canvas.height);
-        applyZoom();
       } else if (state.currentIndex >= state.photos.length){
         state.currentIndex = state.photos.length - 1;
       }
@@ -936,4 +975,182 @@
       if (!fsSupported()){ alert('Your browser does not support choosing a save folder. Try Chrome/Edge.'); return; }
       try{
         const dir = await window.showDirectoryPicker({ mode:'readwrite' });
-        state.outDir
+        state.outDir = dir;
+        state.outDirName = dir.name || 'Selected Folder';
+        const ok = await ensureDirPermission();
+        if (!ok){ alert('Permission denied for that folder.'); state.outDir = null; }
+      }catch(e){ /* cancelled */ }
+      updateDirUI();
+    });
+    async function saveBlobToDir(filename, blob){
+      if (!await ensureDirPermission()){ alert('No permission to write to the chosen folder.'); return; }
+      async function fileExists(dir, name){ try{ await dir.getFileHandle(name, { create:false }); return true; } catch{ return false; } }
+      function splitName(filename){ const i=filename.lastIndexOf('.'); return i>0?{base:filename.slice(0,i),ext:filename.slice(i)}:{base:filename,ext:''}; }
+      async function uniqueName(dir, desired){
+        if (!(await fileExists(dir, desired))) return desired;
+        const { base, ext } = splitName(desired);
+        for (let i=1;i<10000;i++){ const cand = `${base} (${i})${ext}`; if (!(await fileExists(dir, cand))) return cand; }
+        return `${base} (${Date.now()})${ext}`;
+      }
+      const finalName = await uniqueName(state.outDir, filename);
+      const fileHandle = await state.outDir.getFileHandle(finalName, { create:true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob); await writable.close();
+      return finalName;
+    }
+    async function saveCurrentToDir(){
+      const photo = state.photos[state.currentIndex];
+      if (!photo) return alert('Add a photo first.');
+      const mime = formatEl.value;
+      const base = photo.name.replace(/\.[^.]+$/, '');
+      await new Promise(r => requestAnimationFrame(r)); // ensure draw
+      const blob = await new Promise(res => canvas.toBlob(res, mime, mime === 'image/jpeg' ? 0.92 : undefined));
+      const savedAs = await saveBlobToDir(`${base}_watermarked${mime==='image/png'?'.png':'.jpg'}`, blob);
+      if (savedAs) dirNote.textContent = `Saved ${savedAs} to: ${state.outDirName}`;
+    }
+    async function saveAllToDir(){
+      if (!state.photos.length) return alert('Add some photos first.');
+      const mime = formatEl.value;
+      for (let i=0;i<state.photos.length;i++){
+        setCurrent(i);
+        await new Promise(r => requestAnimationFrame(r));
+        const base = state.photos[i].name.replace(/\.[^.]+$/, '');
+        const blob = await new Promise(res => canvas.toBlob(res, mime, mime === 'image/jpeg' ? 0.92 : undefined));
+        await saveBlobToDir(`${base}_watermarked${mime==='image/png'?'.png':'.jpg'}`, blob);
+      }
+      dirNote.textContent = `Saved ${state.photos.length) } file(s) to: ${state.outDirName}`;
+    }
+    document.getElementById('btn-save-current-to-dir').addEventListener('click', saveCurrentToDir);
+    document.getElementById('btn-save-all-to-dir').addEventListener('click', saveAllToDir);
+    updateDirUI();
+
+    // ---------- Templates ----------
+    const LS_KEY = 'wm_templates_v3';
+    function getTemplates(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch{ return []; } }
+    function setTemplates(list){ localStorage.setItem(LS_KEY, JSON.stringify(list)); }
+    function serializeTemplate(name){
+      let logoDataUrl = null;
+      if (state.logoImg){
+        const tmp = document.createElement('canvas');
+        tmp.width = state.logoImg.naturalWidth; tmp.height = state.logoImg.naturalHeight;
+        tmp.getContext('2d').drawImage(state.logoImg, 0, 0);
+        logoDataUrl = tmp.toDataURL('image/png');
+      }
+      return { name, settings:{...state.settings}, logo:{ dataUrl:logoDataUrl }, text:{...state.text}, createdAt:Date.now(), version:3 };
+    }
+    function saveTemplate(name){
+      if (!name){ alert('Enter a template name.'); return; }
+      const tpl = serializeTemplate(name);
+      const list = getTemplates().filter(t => t.name !== name);
+      list.unshift(tpl); setTemplates(list); renderTplList(); alert('Template saved.');
+    }
+    function applyTemplate(tpl){
+      if (tpl.logo?.dataUrl){
+        const img = new Image();
+        img.onload = () => { state.logoImg = img; state.logoName = 'Logo'; renderLogoThumb(); restoreStateFromTpl(tpl); };
+        img.src = tpl.logo.dataUrl;
+      } else {
+        state.logoImg = null; state.logoName = ''; renderLogoThumb(); restoreStateFromTpl(tpl);
+      }
+    }
+    function restoreStateFromTpl(tpl){
+      state.settings = { ...state.settings, ...tpl.settings };
+      if (tpl.text) state.text = { ...state.text, ...tpl.text };
+      syncControls(); raf(draw);
+    }
+    function deleteTemplate(name){
+      if (!confirm(`Delete template "${name}"?`)) return;
+      const list = getTemplates().filter(t => t.name !== name);
+      setTemplates(list); renderTplList();
+    }
+    function renderTplList(){
+      const list = getTemplates();
+      const tplListEl = document.getElementById('tpl-list');
+      tplListEl.innerHTML = '';
+      if (!list.length){
+        const p = document.createElement('div'); p.className='muted'; p.textContent='No templates yet.';
+        tplListEl.appendChild(p); return;
+      }
+      list.forEach(t => {
+        const row = document.createElement('div');
+        row.className = 'template-row';
+        row.innerHTML = `
+          <div>
+            <div style="font-size:12px; font-weight:700;">${t.name}</div>
+            <div class="muted" style="font-size:10px;">Scale ${t.settings.scalePct}% · Logo ${Math.round(t.settings.opacity*100)}% · ${t.settings.anchor}${t.text?.value ? ' · Text ✓' : ''}</div>
+          </div>
+          <button class="btn" data-act="load">Load</button>
+          <button class="btn" data-act="rename">Rename</button>
+          <button class="btn" data-act="export">Export</button>
+          <button class="btn warn" data-act="delete">Delete</button>
+        `;
+        row.querySelector('[data-act="load"]').onclick = () => applyTemplate(t);
+        row.querySelector('[data-act="delete"]').onclick = () => deleteTemplate(t.name);
+        row.querySelector('[data-act="rename"]').onclick = () => {
+          const nn = prompt('New name', t.name); if (!nn) return;
+          const list2 = getTemplates(); const idx = list2.findIndex(x => x.name === t.name);
+          if (idx >= 0){ list2[idx].name = nn; setTemplates(list2); renderTplList(); }
+        };
+        row.querySelector('[data-act="export"]').onclick = () => {
+          const blob = new Blob([JSON.stringify(t, null, 2)], { type:'application/json' });
+          saveAs(blob, `${t.name || 'template'}.json`);
+        };
+        tplListEl.appendChild(row);
+      });
+    }
+
+    document.getElementById('btn-save-tpl').addEventListener('click', () => saveTemplate(document.getElementById('tpl-name').value.trim()));
+    document.getElementById('btn-export-tpl').addEventListener('click', () => {
+      const name = document.getElementById('tpl-name').value.trim() || 'template';
+      const blob = new Blob([JSON.stringify(serializeTemplate(name), null, 2)], { type:'application/json' });
+      saveAs(blob, `${name}.json`);
+    });
+    document.getElementById('btn-import-tpl').addEventListener('click', () => document.getElementById('tpl-import-input').click());
+    document.getElementById('tpl-import-input').addEventListener('change', () => {
+      const f = document.getElementById('tpl-import-input').files[0]; if (!f) return;
+      const fr = new FileReader();
+      fr.onload = () => {
+        try{
+          const tpl = JSON.parse(fr.result);
+          const list = getTemplates().filter(t => t.name !== tpl.name);
+          list.unshift(tpl); setTemplates(list); renderTplList(); applyTemplate(tpl);
+        }catch(e){ alert('Failed to import template: ' + e.message); }
+      };
+      fr.readAsText(f); document.getElementById('tpl-import-input').value='';
+    });
+    document.getElementById('btn-clear-templates').addEventListener('click', () => {
+      if (!getTemplates().length){ alert('No templates saved.'); return; }
+      if (confirm('Delete ALL saved templates? This cannot be undone.')){ setTemplates([]); renderTplList(); }
+    });
+
+    function syncControls(){
+      scaleEl.value = state.settings.scalePct;
+      opacityEl.value = Math.round(state.settings.opacity * 100);
+      anchorEl.value = state.settings.anchor;
+      offsetXEl.value = state.settings.offsetX;
+      offsetYEl.value = state.settings.offsetY;
+      dragToggle.checked = state.drag.enabled;
+
+      txtTextEl.value = state.text.value;
+      txtFontEl.value = state.text.fontFamily;
+      txtSizeEl.value = state.text.sizePx;
+      txtColorEl.value = state.text.color;
+      txtOpacityEl.value = Math.round(state.text.opacity * 100);
+      txtRotEl.value = state.text.rotDeg;
+      txtDragToggle.checked = state.text.dragEnabled;
+      txtAnchorEl.value = state.text.anchor;
+      txtOffXEl.value = state.text.offsetX;
+      txtOffYEl.value = state.text.offsetY;
+    }
+
+    (function init(){
+      renderLogoThumb();
+      refreshPhotoThumbs();
+      syncControls();
+      renderTplList();
+      setZoom(1, 'fit');
+      updateScrollShadows();
+    })();
+  </script>
+</body>
+</html>
