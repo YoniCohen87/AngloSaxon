@@ -1018,7 +1018,7 @@
         const blob = await new Promise(res => canvas.toBlob(res, mime, mime === 'image/jpeg' ? 0.92 : undefined));
         await saveBlobToDir(`${base}_watermarked${mime==='image/png'?'.png':'.jpg'}`, blob);
       }
-      dirNote.textContent = `Saved ${state.photos.length) } file(s) to: ${state.outDirName}`;
+      dirNote.textContent = `Saved ${state.photos.length } file(s) to: ${state.outDirName}`;
     }
     document.getElementById('btn-save-current-to-dir').addEventListener('click', saveCurrentToDir);
     document.getElementById('btn-save-all-to-dir').addEventListener('click', saveAllToDir);
