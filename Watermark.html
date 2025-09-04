@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Watermark Studio — Smooth Drag + Robust Template I/O</title>
+  <title>Watermark Studio — Smooth Dragging</title>
   <style>
     :root{
       --bg:#0b0d12; --panel:#131722; --muted:#8b9bb3; --text:#e6edf6;
@@ -61,9 +61,7 @@
     .btn:active{ transform:translateY(0); }
     .note{ color:var(--muted); font-size:12px; margin-left:4px; white-space:nowrap; }
 
-    .mobile-tabs{
-      display:none; grid-column:1 / -1; margin-top:6px; gap:8px; max-width:100%;
-    }
+    .mobile-tabs{ display:none; grid-column:1 / -1; margin-top:6px; gap:8px; max-width:100%; }
     .tab{
       flex:1 1 0; text-align:center; border-radius:999px; padding:8px 12px; font-weight:700;
       border:1px solid var(--border); background:#0f1421; cursor:pointer; min-height:40px;
@@ -180,14 +178,11 @@
     @media (max-width:980px){
       header{ grid-template-columns: 1fr; }
       .mobile-tabs{ display:flex; }
-
       .wrap{ grid-template-columns: 1fr; }
       .pane{ display:none; }
       .pane.active{ display:flex; }
-
       details.card{ overflow:hidden; }
       details.card:not([open]) .body{ display:none; }
-
       .thumbs{ display:flex; gap:8px; overflow:auto; padding-bottom:2px; }
       .thumb{ flex:0 0 120px; }
       .preview{ height: 45vh; }
@@ -566,12 +561,13 @@
       const base = logoBasePos();
       return { x: base.x + Number(state.settings.offsetX||0), y: base.y + Number(state.settings.offsetY||0) };
     }
-    function setLogoAbs(x, y){
+    function setLogoAbs(x, y, { snap=true } = {}){
       const base = logoBasePos();
-      state.settings.offsetX = Math.round(x - base.x);
-      state.settings.offsetY = Math.round(y - base.y);
-      offsetXEl.value = state.settings.offsetX;
-      offsetYEl.value = state.settings.offsetY;
+      state.settings.offsetX = snap ? Math.round(x - base.x) : (x - base.x);
+      state.settings.offsetY = snap ? Math.round(y - base.y) : (y - base.y);
+      // reflect in controls (rounded so inputs stay tidy)
+      offsetXEl.value = Math.round(state.settings.offsetX);
+      offsetYEl.value = Math.round(state.settings.offsetY);
       raf(draw);
     }
     function setLogoAnchorSnap(newAnchor){
@@ -607,7 +603,7 @@
       return { x:0, y:0 };
     }
     function getTextAbs(){ const b = textBasePos(); return { x: b.x + Number(state.text.offsetX||0), y: b.y + Number(state.text.offsetY||0) }; }
-    function setTextAbs(x, y){ const b = textBasePos(); state.text.offsetX = Math.round(x - b.x); state.text.offsetY = Math.round(y - b.y); txtOffXEl.value = state.text.offsetX; txtOffYEl.value = state.text.offsetY; raf(draw); }
+    function setTextAbs(x, y, { snap=true } = {}){ const b = textBasePos(); state.text.offsetX = snap ? Math.round(x - b.x) : (x - b.x); state.text.offsetY = snap ? Math.round(y - b.y) : (y - b.y); txtOffXEl.value = Math.round(state.text.offsetX); txtOffYEl.value = Math.round(state.text.offsetY); raf(draw); }
     function setTextAnchorSnap(newAnchor){ state.text.anchor = newAnchor; state.text.offsetX = 0; state.text.offsetY = 0; txtOffXEl.value = 0; txtOffYEl.value = 0; raf(draw); }
 
     // ---------- Zoom ----------
@@ -643,7 +639,6 @@
       ctx.clearRect(0,0,canvas.width,canvas.height);
       if (!photo) { applyZoom(); return; }
 
-      // Resize only when necessary (huge perf win while dragging)
       ensureCanvasSize(photo.img.naturalWidth, photo.img.naturalHeight);
 
       // Base photo
@@ -757,8 +752,8 @@
     // ---------- Pointer interactions (drag) ----------
     function getPointerCanvasXY(e){
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
+      const scaleX = canvas.width / rect.width;   // = 1/zoom
+      const scaleY = canvas.height / rect.height; // = 1/zoom
       return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
     }
     function measureTextRectForHit(){
@@ -772,6 +767,7 @@
       const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
       return { x:p.x, y:p.y, w:Math.ceil(w*cos + h*sin), h:Math.ceil(w*sin + h*cos) };
     }
+    function expandRect(r, by){ return { x:r.x - by, y:r.y - by, w:r.w + 2*by, h:r.h + 2*by }; }
     function pointInRect(x,y,r){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; }
 
     let dragTarget = null; // 'text' | 'logo'
@@ -780,39 +776,36 @@
     canvas.addEventListener('pointerdown', (e) => {
       if (state.currentIndex === -1) return;
 
-      const now = Date.now();
-      if (now - lastTapTime < 300){
-        const step = 1.1; setZoom(state.zoom * step, 'manual');
-        lastTapTime = 0;
-        return;
-      }
-      lastTapTime = now;
-
       const { x, y } = getPointerCanvasXY(e);
 
-      // TEXT drag?
-      const tr = measureTextRectForHit();
-      if (state.text.dragEnabled && tr && pointInRect(x,y,tr)){
-        e.preventDefault();
-        dragTarget = 'text';
-        state.text.drag.active = true;
-        state.text.drag.id = e.pointerId;
-        const p = getTextAbs();
-        state.text.drag.dx = x - p.x;
-        state.text.drag.dy = y - p.y;
-        canvas.setPointerCapture(e.pointerId);
-        // lock scroll while dragging for smoother motion
-        previewEl.dataset.prevOverflow = previewEl.style.overflow || '';
-        previewEl.style.overflow = 'hidden';
-        canvas.style.touchAction = 'none';
-        return;
+      // TEXT drag hit-test first
+      const trRaw = measureTextRectForHit();
+      if (state.text.dragEnabled && trRaw){
+        const margin = Math.max(8, 12 / Math.max(state.zoom, 0.001)); // ~12 CSS px margin
+        const tr = expandRect(trRaw, margin);
+        if (pointInRect(x,y,tr)){
+          e.preventDefault();
+          dragTarget = 'text';
+          state.text.drag.active = true;
+          state.text.drag.id = e.pointerId;
+          const p = getTextAbs();
+          state.text.drag.dx = x - p.x;
+          state.text.drag.dy = y - p.y;
+          canvas.setPointerCapture(e.pointerId);
+          // lock scroll while dragging
+          previewEl.dataset.prevOverflow = previewEl.style.overflow || '';
+          previewEl.style.overflow = 'hidden';
+          canvas.style.touchAction = 'none';
+          return;
+        }
       }
 
-      // LOGO drag?
+      // LOGO drag hit-test (with larger, zoom-aware margin)
       if (state.drag.enabled && state.logoImg){
         const { w, h } = logoDims();
         const p = getLogoAbs();
-        const r = { x:p.x, y:p.y, w, h };
+        const margin = Math.max(8, 12 / Math.max(state.zoom, 0.001)); // ~12 CSS px
+        const r = expandRect({ x:p.x, y:p.y, w, h }, margin);
         if (pointInRect(x,y,r)){
           e.preventDefault();
           dragTarget = 'logo';
@@ -824,8 +817,19 @@
           previewEl.dataset.prevOverflow = previewEl.style.overflow || '';
           previewEl.style.overflow = 'hidden';
           canvas.style.touchAction = 'none';
+          return;
         }
       }
+
+      // Not hitting draggable areas → handle double-tap zoom (no accidental triggers)
+      const now = Date.now();
+      if (now - lastTapTime < 300){
+        zoomStep(+1);
+        lastTapTime = 0;
+        return;
+      }
+      lastTapTime = now;
+      // allow native scroll otherwise
     }, { passive:false });
 
     canvas.addEventListener('pointermove', (e) => {
@@ -833,18 +837,23 @@
       const { x, y } = getPointerCanvasXY(e);
       if (dragTarget === 'text' && state.text.drag.active){
         e.preventDefault();
-        setTextAbs(Math.round(x - state.text.drag.dx), Math.round(y - state.text.drag.dy));
+        setTextAbs(x - state.text.drag.dx, y - state.text.drag.dy, { snap:false });
       } else if (dragTarget === 'logo' && state.drag.active){
         e.preventDefault();
-        setLogoAbs(Math.round(x - state.drag.dx), Math.round(y - state.drag.dy));
+        setLogoAbs(x - state.drag.dx, y - state.drag.dy, { snap:false });
       }
     }, { passive:false });
 
     function endDrag(){
+      // snap to whole pixels on release for crisp export
+      if (dragTarget === 'logo'){
+        const p = getLogoAbs(); setLogoAbs(p.x, p.y, { snap:true });
+      }else if (dragTarget === 'text'){
+        const p = getTextAbs(); setTextAbs(p.x, p.y, { snap:true });
+      }
       dragTarget = null;
       state.drag.active = false; state.drag.id = null;
       state.text.drag.active = false; state.text.drag.id = null;
-      // restore scroll/gesture
       canvas.style.touchAction = 'auto';
       previewEl.style.overflow = previewEl.dataset.prevOverflow || '';
       delete previewEl.dataset.prevOverflow;
@@ -1014,13 +1023,12 @@
     document.getElementById('btn-save-all-to-dir').addEventListener('click', saveAllToDir);
     updateDirUI();
 
-    // ---------- Templates (save / import / export) ----------
+    // ---------- Templates ----------
     const LS_KEY = 'wm_templates_v4';
     function getTemplates(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch{ return []; } }
     function setTemplates(list){ localStorage.setItem(LS_KEY, JSON.stringify(list)); }
 
     function serializeTemplate(name){
-      // keep only stable fields
       const { scalePct, opacity, anchor, offsetX, offsetY } = state.settings;
       const text = {
         value: state.text.value,
@@ -1041,10 +1049,7 @@
           tmp.width = state.logoImg.naturalWidth; tmp.height = state.logoImg.naturalHeight;
           tmp.getContext('2d').drawImage(state.logoImg, 0, 0);
           logoDataUrl = tmp.toDataURL('image/png');
-        }catch(e){
-          // if tainted, skip embedding; user can re-add logo
-          logoDataUrl = null;
-        }
+        }catch(e){ logoDataUrl = null; }
       }
       return { name, settings:{ scalePct, opacity, anchor, offsetX, offsetY }, logo:{ dataUrl:logoDataUrl }, text, createdAt:Date.now(), version:4 };
     }
@@ -1057,7 +1062,6 @@
     }
 
     function applyTemplate(tpl){
-      // allow old versions (v3)
       const tset = tpl.settings || {};
       state.settings = {
         ...state.settings,
@@ -1087,8 +1091,6 @@
         const img = new Image();
         img.onload = () => { state.logoImg = img; state.logoName = 'Logo'; renderLogoThumb(); raf(draw); };
         img.src = tpl.logo.dataUrl;
-      }else{
-        // keep existing logo if any; user can clear if desired
       }
       syncControls(); raf(draw);
     }
@@ -1133,7 +1135,6 @@
         row.querySelector('[data-act="export"]').onclick = () => {
           try{
             const blob = new Blob([JSON.stringify(t, null, 2)], { type:'application/json' });
-            // prefer native anchor, fallback to FileSaver
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url; a.download = `${t.name || 'template'}.json`; a.click();
@@ -1187,8 +1188,8 @@
       scaleEl.value = state.settings.scalePct;
       opacityEl.value = Math.round(state.settings.opacity * 100);
       anchorEl.value = state.settings.anchor;
-      offsetXEl.value = state.settings.offsetX;
-      offsetYEl.value = state.settings.offsetY;
+      offsetXEl.value = Math.round(state.settings.offsetX);
+      offsetYEl.value = Math.round(state.settings.offsetY);
       dragToggle.checked = state.drag.enabled;
 
       txtTextEl.value = state.text.value;
@@ -1199,8 +1200,8 @@
       txtRotEl.value = state.text.rotDeg;
       txtDragToggle.checked = state.text.dragEnabled;
       txtAnchorEl.value = state.text.anchor;
-      txtOffXEl.value = state.text.offsetX;
-      txtOffYEl.value = state.text.offsetY;
+      txtOffXEl.value = Math.round(state.text.offsetX);
+      txtOffYEl.value = Math.round(state.text.offsetY);
     }
 
     (function init(){
