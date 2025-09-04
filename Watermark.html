@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Watermark Studio — Smooth Dragging</title>
+  <title>Watermark Studio — iOS-smooth Drag</title>
   <style>
     :root{
       --bg:#0b0d12; --panel:#131722; --muted:#8b9bb3; --text:#e6edf6;
@@ -22,6 +22,7 @@
       overflow-y:auto;
       -webkit-overflow-scrolling: touch;
       scrollbar-gutter: stable both-edges;
+      overscroll-behavior-y: contain; /* reduces rubber-band on iOS */
     }
     @supports not (min-height:100svh){ body{ min-height:100vh; } }
 
@@ -85,7 +86,7 @@
     details.card[open] > summary{ border-bottom:1px solid var(--border); }
     .card .body{ padding:12px; display:flex; flex-direction:column; gap:12px; }
 
-    /* Preview: fixed height; native pan when zoomed */
+    /* Preview: fixed height; native pan when zoomed; lock only during drag */
     .preview{
       position:relative;
       background:#0a0f1c; border:1px solid var(--border); border-radius:14px;
@@ -178,11 +179,14 @@
     @media (max-width:980px){
       header{ grid-template-columns: 1fr; }
       .mobile-tabs{ display:flex; }
+
       .wrap{ grid-template-columns: 1fr; }
       .pane{ display:none; }
       .pane.active{ display:flex; }
+
       details.card{ overflow:hidden; }
       details.card:not([open]) .body{ display:none; }
+
       .thumbs{ display:flex; gap:8px; overflow:auto; padding-bottom:2px; }
       .thumb{ flex:0 0 120px; }
       .preview{ height: 45vh; }
@@ -491,26 +495,7 @@
     const dragToggle = document.getElementById('dragToggle');
     const formatEl = document.getElementById('format');
 
-    const exportBtn = document.getElementById('btn-export');
-    const exportAllBtn = document.getElementById('btn-export-all');
     const removeCurrentBtn = document.getElementById('btn-remove-current');
-
-    const chooseDirBtn = document.getElementById('btn-choose-dir');
-    const saveCurrentToDirBtn = document.getElementById('btn-save-current-to-dir');
-    const saveAllToDirBtn = document.getElementById('btn-save-all-to-dir');
-    const dirNote = document.getElementById('dir-note');
-
-    const txtTextEl = document.getElementById('txt-text');
-    const txtFontEl = document.getElementById('txt-font');
-    const txtSizeEl = document.getElementById('txt-size');
-    const txtColorEl = document.getElementById('txt-color');
-    const txtOpacityEl = document.getElementById('txt-opacity');
-    const txtRotEl = document.getElementById('txt-rot');
-    const txtDragToggle = document.getElementById('txt-drag-toggle');
-    const resetTiltBtn = document.getElementById('btn-reset-tilt');
-    const txtAnchorEl = document.getElementById('txt-anchor');
-    const txtOffXEl  = document.getElementById('txt-offx');
-    const txtOffYEl  = document.getElementById('txt-offy');
 
     const zIn = document.getElementById('zoom-in');
     const zOut = document.getElementById('zoom-out');
@@ -565,7 +550,6 @@
       const base = logoBasePos();
       state.settings.offsetX = snap ? Math.round(x - base.x) : (x - base.x);
       state.settings.offsetY = snap ? Math.round(y - base.y) : (y - base.y);
-      // reflect in controls (rounded so inputs stay tidy)
       offsetXEl.value = Math.round(state.settings.offsetX);
       offsetYEl.value = Math.round(state.settings.offsetY);
       raf(draw);
@@ -628,7 +612,7 @@
     function zoomStep(dir){ const step = dir > 0 ? 1.1 : 1/1.1; setZoom(state.zoom * step, 'manual'); }
     new ResizeObserver(() => { if (state.zoomMode==='fit') applyZoom(); }).observe(previewEl);
 
-    // ---------- Drawing / performance ----------
+    // ---------- Drawing ----------
     function ensureCanvasSize(w, h){
       if (canvas.width !== w || canvas.height !== h){
         canvas.width = w; canvas.height = h;
@@ -749,11 +733,11 @@
       refreshPhotoThumbs(); raf(draw);
     });
 
-    // ---------- Pointer interactions (drag) ----------
+    // ---------- Drag / iOS scroll lock ----------
     function getPointerCanvasXY(e){
       const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;   // = 1/zoom
-      const scaleY = canvas.height / rect.height; // = 1/zoom
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
       return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
     }
     function measureTextRectForHit(){
@@ -771,17 +755,41 @@
     function pointInRect(x,y,r){ return x>=r.x && x<=r.x+r.w && y>=r.y && y<=r.y+r.h; }
 
     let dragTarget = null; // 'text' | 'logo'
-    let lastTapTime = 0;
+    let dragLock = false;  // hard lock to stop iOS page scrolling
+
+    // Global guard for iOS: while dragging, prevent touch scroll at the document level
+    window.addEventListener('touchmove', (e) => {
+      if (dragLock) e.preventDefault();
+    }, { passive:false });
+
+    function lockScrollForDrag(){
+      dragLock = true;
+      previewEl.dataset.prevOverflow = previewEl.style.overflow || '';
+      previewEl.dataset.prevTA = previewEl.style.touchAction || '';
+      previewEl.style.overflow = 'hidden';
+      previewEl.style.touchAction = 'none';
+      canvas.style.touchAction = 'none';
+      document.body.style.userSelect = 'none';
+    }
+    function unlockScrollForDrag(){
+      dragLock = false;
+      canvas.style.touchAction = 'auto';
+      previewEl.style.overflow = previewEl.dataset.prevOverflow || '';
+      previewEl.style.touchAction = previewEl.dataset.prevTA || 'pan-x pan-y';
+      delete previewEl.dataset.prevOverflow;
+      delete previewEl.dataset.prevTA;
+      document.body.style.userSelect = '';
+    }
 
     canvas.addEventListener('pointerdown', (e) => {
       if (state.currentIndex === -1) return;
 
       const { x, y } = getPointerCanvasXY(e);
 
-      // TEXT drag hit-test first
+      // TEXT first
       const trRaw = measureTextRectForHit();
       if (state.text.dragEnabled && trRaw){
-        const margin = Math.max(8, 12 / Math.max(state.zoom, 0.001)); // ~12 CSS px margin
+        const margin = Math.max(8, 12 / Math.max(state.zoom, 0.001)); // ~12 CSS px
         const tr = expandRect(trRaw, margin);
         if (pointInRect(x,y,tr)){
           e.preventDefault();
@@ -792,19 +800,16 @@
           state.text.drag.dx = x - p.x;
           state.text.drag.dy = y - p.y;
           canvas.setPointerCapture(e.pointerId);
-          // lock scroll while dragging
-          previewEl.dataset.prevOverflow = previewEl.style.overflow || '';
-          previewEl.style.overflow = 'hidden';
-          canvas.style.touchAction = 'none';
+          lockScrollForDrag();
           return;
         }
       }
 
-      // LOGO drag hit-test (with larger, zoom-aware margin)
+      // LOGO
       if (state.drag.enabled && state.logoImg){
         const { w, h } = logoDims();
         const p = getLogoAbs();
-        const margin = Math.max(8, 12 / Math.max(state.zoom, 0.001)); // ~12 CSS px
+        const margin = Math.max(8, 12 / Math.max(state.zoom, 0.001));
         const r = expandRect({ x:p.x, y:p.y, w, h }, margin);
         if (pointInRect(x,y,r)){
           e.preventDefault();
@@ -814,22 +819,11 @@
           state.drag.dx = x - p.x;
           state.drag.dy = y - p.y;
           canvas.setPointerCapture(e.pointerId);
-          previewEl.dataset.prevOverflow = previewEl.style.overflow || '';
-          previewEl.style.overflow = 'hidden';
-          canvas.style.touchAction = 'none';
+          lockScrollForDrag();
           return;
         }
       }
-
-      // Not hitting draggable areas → handle double-tap zoom (no accidental triggers)
-      const now = Date.now();
-      if (now - lastTapTime < 300){
-        zoomStep(+1);
-        lastTapTime = 0;
-        return;
-      }
-      lastTapTime = now;
-      // allow native scroll otherwise
+      // If not hitting draggable items: allow native pan/scroll
     }, { passive:false });
 
     canvas.addEventListener('pointermove', (e) => {
@@ -845,7 +839,6 @@
     }, { passive:false });
 
     function endDrag(){
-      // snap to whole pixels on release for crisp export
       if (dragTarget === 'logo'){
         const p = getLogoAbs(); setLogoAbs(p.x, p.y, { snap:true });
       }else if (dragTarget === 'text'){
@@ -854,15 +847,13 @@
       dragTarget = null;
       state.drag.active = false; state.drag.id = null;
       state.text.drag.active = false; state.text.drag.id = null;
-      canvas.style.touchAction = 'auto';
-      previewEl.style.overflow = previewEl.dataset.prevOverflow || '';
-      delete previewEl.dataset.prevOverflow;
+      unlockScrollForDrag();
     }
     canvas.addEventListener('pointerup', endDrag, { passive:true });
     canvas.addEventListener('pointercancel', endDrag, { passive:true });
     canvas.addEventListener('lostpointercapture', endDrag, { passive:true });
 
-    // ---------- Controls — Logo ----------
+    // ---------- Controls ----------
     scaleEl.addEventListener('input', () => { state.settings.scalePct = Number(scaleEl.value); raf(draw); });
     opacityEl.addEventListener('input', () => { state.settings.opacity = Number(opacityEl.value)/100; raf(draw); });
     anchorEl.addEventListener('change', () => setLogoAnchorSnap(anchorEl.value));
@@ -870,7 +861,18 @@
     offsetYEl.addEventListener('input', () => { state.settings.offsetY = Number(offsetYEl.value||0); raf(draw); });
     dragToggle.addEventListener('change', () => { state.drag.enabled = dragToggle.checked; });
 
-    // ---------- Controls — Text ----------
+    const txtTextEl = document.getElementById('txt-text');
+    const txtFontEl = document.getElementById('txt-font');
+    const txtSizeEl = document.getElementById('txt-size');
+    const txtColorEl = document.getElementById('txt-color');
+    const txtOpacityEl = document.getElementById('txt-opacity');
+    const txtRotEl = document.getElementById('txt-rot');
+    const txtDragToggle = document.getElementById('txt-drag-toggle');
+    const resetTiltBtn = document.getElementById('btn-reset-tilt');
+    const txtAnchorEl = document.getElementById('txt-anchor');
+    const txtOffXEl  = document.getElementById('txt-offx');
+    const txtOffYEl  = document.getElementById('txt-offy');
+
     txtTextEl.addEventListener('input', () => { state.text.value = txtTextEl.value; raf(draw); });
     txtFontEl.addEventListener('change', () => { state.text.fontFamily = txtFontEl.value; raf(draw); });
     txtSizeEl.addEventListener('input', () => { state.text.sizePx = Math.max(6, Number(txtSizeEl.value||0)); raf(draw); });
@@ -890,15 +892,15 @@
     previewElRef.addEventListener('wheel', (e) => {
       if (e.ctrlKey || e.metaKey){
         e.preventDefault();
-        if (e.deltaY < 0) zoomStep(+1); else zoomStep(-1);
+        if (e.deltaY < 0) setZoom(state.zoom * 1.1, 'manual'); else setZoom(state.zoom / 1.1, 'manual');
       }
     }, { passive:false });
-    zIn.addEventListener('click',  () => zoomStep(+1));
-    zOut.addEventListener('click', () => zoomStep(-1));
+    zIn.addEventListener('click',  () => setZoom(state.zoom * 1.1, 'manual'));
+    zOut.addEventListener('click', () => setZoom(state.zoom / 1.1, 'manual'));
     zFit.addEventListener('click', () => setZoom(computeFitZoom(), 'fit'));
     z100.addEventListener('click', () => setZoom(1, 'manual'));
 
-    // ---------- Export ----------
+    // ---------- Export (kept) ----------
     function downloadCurrent(){
       const photo = state.photos[state.currentIndex];
       if (!photo) return alert('Add a photo first.');
@@ -920,7 +922,6 @@
         }, mime, mime === 'image/jpeg' ? 0.92 : undefined);
       });
     }
-
     async function processAllZip(){
       if (!state.photos.length) return alert('Add some photos first.');
       if (typeof JSZip === 'undefined'){ alert('JSZip not loaded. Try again or download individually.'); return; }
@@ -946,11 +947,15 @@
         saveAs(out, 'watermarked_photos.zip');
       }
     }
-
     document.getElementById('btn-export').addEventListener('click', downloadCurrent);
     document.getElementById('btn-export-all').addEventListener('click', processAllZip);
 
-    // ---------- Save-to-folder helpers ----------
+    // ---------- Save-to-folder helpers (kept) ----------
+    const chooseDirBtn = document.getElementById('btn-choose-dir');
+    const saveCurrentToDirBtn = document.getElementById('btn-save-current-to-dir');
+    const saveAllToDirBtn = document.getElementById('btn-save-all-to-dir');
+    const dirNote = document.getElementById('dir-note');
+
     function fsSupported(){ return 'showDirectoryPicker' in window; }
     function updateDirUI(){
       const on = !!state.outDir;
@@ -958,6 +963,7 @@
       saveAllToDirBtn.disabled = !on;
       dirNote.textContent = on ? `Saving to: ${state.outDirName}` :
         (fsSupported() ? 'Pick a folder to save images there.' : 'Folder saving not supported in this browser.');
+      document.getElementById('actions-details').style.display = fsSupported() ? '' : '';
     }
     async function ensureDirPermission(){
       if (!state.outDir) return false;
@@ -1023,7 +1029,7 @@
     document.getElementById('btn-save-all-to-dir').addEventListener('click', saveAllToDir);
     updateDirUI();
 
-    // ---------- Templates ----------
+    // ---------- Templates (kept) ----------
     const LS_KEY = 'wm_templates_v4';
     function getTemplates(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch{ return []; } }
     function setTemplates(list){ localStorage.setItem(LS_KEY, JSON.stringify(list)); }
@@ -1149,7 +1155,6 @@
     }
 
     document.getElementById('btn-save-tpl').addEventListener('click', () => saveTemplate(document.getElementById('tpl-name').value.trim()));
-
     document.getElementById('btn-export-tpl').addEventListener('click', () => {
       const name = document.getElementById('tpl-name').value.trim() || 'template';
       try{
@@ -1163,7 +1168,6 @@
         saveAs(blob, `${name}.json`);
       }
     });
-
     document.getElementById('btn-import-tpl').addEventListener('click', () => document.getElementById('tpl-import-input').click());
     document.getElementById('tpl-import-input').addEventListener('change', () => {
       const f = document.getElementById('tpl-import-input').files[0]; if (!f) return;
@@ -1192,16 +1196,27 @@
       offsetYEl.value = Math.round(state.settings.offsetY);
       dragToggle.checked = state.drag.enabled;
 
-      txtTextEl.value = state.text.value;
-      txtFontEl.value = state.text.fontFamily;
-      txtSizeEl.value = state.text.sizePx;
-      txtColorEl.value = state.text.color;
-      txtOpacityEl.value = Math.round(state.text.opacity * 100);
-      txtRotEl.value = state.text.rotDeg;
-      txtDragToggle.checked = state.text.dragEnabled;
-      txtAnchorEl.value = state.text.anchor;
-      txtOffXEl.value = Math.round(state.text.offsetX);
-      txtOffYEl.value = Math.round(state.text.offsetY);
+      const txtTextEl2 = document.getElementById('txt-text');
+      const txtFontEl2 = document.getElementById('txt-font');
+      const txtSizeEl2 = document.getElementById('txt-size');
+      const txtColorEl2 = document.getElementById('txt-color');
+      const txtOpacityEl2 = document.getElementById('txt-opacity');
+      const txtRotEl2 = document.getElementById('txt-rot');
+      const txtDragToggle2 = document.getElementById('txt-drag-toggle');
+      const txtAnchorEl2 = document.getElementById('txt-anchor');
+      const txtOffXEl2 = document.getElementById('txt-offx');
+      const txtOffYEl2 = document.getElementById('txt-offy');
+
+      txtTextEl2.value = state.text.value;
+      txtFontEl2.value = state.text.fontFamily;
+      txtSizeEl2.value = state.text.sizePx;
+      txtColorEl2.value = state.text.color;
+      txtOpacityEl2.value = Math.round(state.text.opacity * 100);
+      txtRotEl2.value = state.text.rotDeg;
+      txtDragToggle2.checked = state.text.dragEnabled;
+      txtAnchorEl2.value = state.text.anchor;
+      txtOffXEl2.value = Math.round(state.text.offsetX);
+      txtOffYEl2.value = Math.round(state.text.offsetY);
     }
 
     (function init(){
