@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Watermark Studio — Compact UI + Expandable Actions</title>
+  <title>Watermark Studio — Single Scroll + Sticky Controls</title>
   <style>
     :root{
       --bg:#0b0d12; --panel:#131722; --muted:#8b9bb3; --text:#e6edf6;
@@ -12,16 +12,18 @@
       --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
     *{ box-sizing:border-box; }
-    html,body{ height:100%; margin:0; }
-    html, body { overflow-x: hidden; }
+    html,body{ height:auto; margin:0; }
+    html { overflow-x:hidden; }
     body{
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       background: linear-gradient(180deg,#0b0d12 0%,#101521 100%);
       color:var(--text);
-      height:100svh;
-      overflow:hidden; /* keep page itself fixed; inner wrapper will scroll */
+      min-height:100svh; /* allow page to scroll naturally */
+      overflow-y:auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-gutter: stable both-edges;
     }
-    @supports not (height:100svh){ body{ height:100vh; } }
+    @supports not (min-height:100svh){ body{ min-height:100vh; } }
 
     header{
       padding: calc(12px + var(--safe-top)) 16px 12px;
@@ -35,7 +37,7 @@
     header .sub{ color:var(--muted); font-size:12px; margin-top:2px; }
     .head-left{ display:flex; flex-direction:column; gap:2px; min-width:0; }
 
-    /* Expandable actions container (minimized by default) */
+    /* Actions (expandable) */
     details.actions-card{
       border:1px solid var(--border); border-radius:12px;
       background:rgba(19,23,34,0.5);
@@ -46,24 +48,11 @@
       padding:8px 10px; font-size:.9rem; color:#c9d5ea;
     }
     details.actions-card[open] > summary{ border-bottom:1px solid var(--border); }
-    details.actions-card .head-actions{ padding:8px; }
-
-    /* Actions area */
-    .head-actions{
-      display:flex; gap:6px; align-items:center;
-      overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:0;
-      min-width:0; max-width:100%;
-    }
+    .head-actions{ padding:8px; display:flex; gap:6px; align-items:center; overflow-x:auto; -webkit-overflow-scrolling:touch; }
     .btn{
       background:#1a2440; color:#fff; border:1px solid var(--border);
-      padding:10px 12px; border-radius:12px; cursor:pointer; transition:.15s ease;
-      font-weight:600; white-space:nowrap; flex:0 0 auto; min-height:44px;
-    }
-    .head-actions .btn{ /* 15% smaller */
-      padding: 8.5px 10px;
-      min-height: 38px;
-      font-size: .85rem;
-      border-radius: 10px;
+      padding:8.5px 10px; border-radius:10px; cursor:pointer; transition:.15s ease;
+      font-weight:600; white-space:nowrap; flex:0 0 auto; min-height:38px; font-size:.85rem;
     }
     .btn.primary{ background:#183055; border-color:#2b4e86; }
     .btn.accent{ background:var(--accent); color:#0b0d12; border:none; }
@@ -73,7 +62,6 @@
     .btn:active{ transform:translateY(0); }
     .note{ color:var(--muted); font-size:12px; margin-left:4px; white-space:nowrap; }
 
-    /* Tabs (mobile only) */
     .mobile-tabs{
       display:none; grid-column:1 / -1; margin-top:6px; gap:8px; max-width:100%;
     }
@@ -85,23 +73,15 @@
 
     .wrap{
       display:grid; grid-template-columns: 340px 1fr; gap:16px; padding:12px;
-      height: calc(100svh - var(--headH) - var(--safe-bottom));
-      /* CHANGED: allow the main work area to scroll vertically when content grows
-         (e.g., iPhone Larger Text / Display Zoom). */
-      overflow:auto; 
-      -webkit-overflow-scrolling:touch;
-      overscroll-behavior: contain;
-      scrollbar-gutter: stable both-edges;
-      min-height:0; width:100%; max-width:100%;
+      /* no fixed height; let the page scroll */
+      width:100%; max-width:100%;
     }
-    @supports not (height:100svh){
-      .wrap{ height: calc(100vh - var(--headH)); }
-    }
-    .col{ display:flex; flex-direction:column; min-height:0; height:100%; min-width:0; }
-    .col.controls-panel{ overflow:hidden; }
-    .controls-scroll{
-      height:100%; min-height:0; overflow:auto; -webkit-overflow-scrolling:touch;
-      scrollbar-gutter: stable both-edges; padding-right:6px;
+
+    .col{ display:flex; flex-direction:column; min-width:0; }
+    .col.controls-panel{ /* no inner scroll — let page handle it */ }
+    .controls-scroll{ /* remove inner scrolling */
+      overflow: visible;
+      padding-right: 6px;
     }
 
     .card{ background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:12px; max-width:100%; }
@@ -113,57 +93,15 @@
     details.card[open] > summary{ border-bottom:1px solid var(--border); }
     .card .body{ padding:12px; display:flex; flex-direction:column; gap:12px; }
 
-    /* When text is large and the Preview pane's content grows,
-       let just that area scroll rather than clipping the bottom controls. */
-    #pane-preview .card .body{
-      overflow:auto;
-      -webkit-overflow-scrolling:touch;
-    }
-
-    /* Dropzones — 10% smaller */
-    .drop{
-      background:#0f1421; border:2px dashed #2a3955; border-radius:12px;
-      padding:14px; text-align:center; color:var(--muted);
-      transition:.2s ease; cursor:pointer;
-    }
-    .drop.compact{ padding:12px; font-size:.9rem; }
-    .drop:hover{ border-color:var(--accent); color:#cbd6ea; }
-    .drop.dragover{ background:#0b1220; border-color:#a6da95; }
-
-    .row{ display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; }
-    .controls{ display:grid; gap:10px; }
-
-    label{ font-size:12px; color:var(--muted); }
-    input[type="range"], select, input[type="number"], input[type="text"], input[type="color"]{
-      width:100%; background:#0b1020; color:var(--text); border:1px solid var(--border);
-      border-radius:10px; padding:10px; min-height:44px;
-    }
-    input[type="checkbox"]{ transform: translateY(2px); width:18px; height:18px; }
-
-    /* Thumbnails */
-    .thumbs{
-      display:grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap:8px; max-height:28vh; overflow:auto;
-    }
-    .thumb{ position:relative; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#0b1020; }
-    .thumb img{ display:block; width:100%; height:70px; object-fit:cover; }
-    .thumb .name{ font-size:10px; color:var(--muted); padding:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .thumb .pick,.thumb .trash{
-      position:absolute; top:6px; background:rgba(0,0,0,.5); border:1px solid var(--border);
-      padding:4px 8px; border-radius:999px; font-size:11px; cursor:pointer; min-height:28px;
-    }
-    .thumb .pick{ right:6px; } .thumb .trash{ left:6px; }
-
-    /* Logo thumb 15% smaller */
-    #logo-thumbs .thumb img{ height:60px; }
-    #logo-thumbs .thumb .name{ font-size:9px; }
-
-    /* Preview */
+    /* Preview: no forced internal scroll; min-height so Fit zoom has room */
     .preview{
       position:relative; background:#0a0f1c; border:1px solid var(--border);
-      border-radius:14px; height:100%; overflow:auto; min-height:260px;
+      border-radius:14px; min-height:320px;
       padding:8px; contain: layout paint; isolation:isolate;
-      touch-action: none; overscroll-behavior: contain; /* keep drag smooth on mobile */
+      touch-action: none; overscroll-behavior: contain;
       max-width:100%;
+      /* allow panning only when user zooms above fit; otherwise no second scrollbar */
+      overflow:auto;
     }
     canvas{
       max-width:none; max-height:none; background:#0a0f1c; image-rendering: optimizeQuality;
@@ -188,30 +126,77 @@
       display:inline-block;
     }
 
+    /* Sticky footer inside preview card section to keep Format visible */
+    .sticky-footer{
+      position: sticky;
+      bottom: max(8px, var(--safe-bottom));
+      z-index: 3;
+      background: linear-gradient(180deg, rgba(19,23,34,0.0) 0%, rgba(19,23,34,0.8) 35%, rgba(19,23,34,0.95) 100%);
+      padding: 10px 12px;
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      backdrop-filter: blur(6px);
+    }
+    .sticky-footer .row{ display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; }
+    .sticky-footer .muted{ color:#c9d5ea; font-weight:700; }
+
+    /* Inputs */
+    .row{ display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:center; }
+    .controls{ display:grid; gap:10px; }
+
+    label{ font-size:12px; color:var(--muted); }
+    input[type="range"], select, input[type="number"], input[type="text"], input[type="color"]{
+      width:100%; background:#0b1020; color:var(--text); border:1px solid var(--border);
+      border-radius:10px; padding:10px; min-height:44px;
+    }
+    input[type="checkbox"]{ transform: translateY(2px); width:18px; height:18px; }
+
+    /* Dropzones — compact */
+    .drop{
+      background:#0f1421; border:2px dashed #2a3955; border-radius:12px;
+      padding:14px; text-align:center; color:var(--muted);
+      transition:.2s ease; cursor:pointer;
+    }
+    .drop.compact{ padding:12px; font-size:.9rem; }
+    .drop:hover{ border-color:var(--accent); color:#cbd6ea; }
+    .drop.dragover{ background:#0b1220; border-color:#a6da95; }
+
+    /* Thumbnails */
+    .thumbs{
+      display:grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap:8px;
+    }
+    .thumb{ position:relative; border:1px solid var(--border); border-radius:10px; overflow:hidden; background:#0b1020; }
+    .thumb img{ display:block; width:100%; height:70px; object-fit:cover; }
+    .thumb .name{ font-size:10px; color:var(--muted); padding:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .thumb .pick,.thumb .trash{
+      position:absolute; top:6px; background:rgba(0,0,0,.5); border:1px solid var(--border);
+      padding:4px 8px; border-radius:999px; font-size:11px; cursor:pointer; min-height:28px;
+    }
+    .thumb .pick{ right:6px; } .thumb .trash{ left:6px; }
+
+    /* Logo thumb 15% smaller */
+    #logo-thumbs .thumb img{ height:60px; }
+    #logo-thumbs .thumb .name{ font-size:9px; }
+
     @media (max-width:980px){
       header{ grid-template-columns: 1fr; }
-      .note{ display:none; }
       .mobile-tabs{ display:flex; }
 
-      .wrap{ grid-template-columns: 1fr; height: calc(100svh - var(--headH) - var(--safe-bottom)); overflow:auto; -webkit-overflow-scrolling:touch; }
-      @supports not (height:100svh){
-        .wrap{ height: calc(100vh - var(--headH)); }
-      }
-      .pane{ display:none; min-height:0; }
+      .wrap{ grid-template-columns: 1fr; }
+      .pane{ display:none; }
       .pane.active{ display:flex; }
 
       details.card{ overflow:hidden; }
       details.card:not([open]) .body{ display:none; }
 
       .thumbs{
-        display:flex; gap:8px; overflow:auto; max-height:none; padding-bottom:2px;
+        display:flex; gap:8px; overflow:auto; padding-bottom:2px;
       }
       .thumb{ flex:0 0 120px; }
+      /* give preview more space on mobile */
+      .preview{ min-height: 45vh; }
     }
-
-    .controls-scroll::-webkit-scrollbar{ width:10px; height:10px; }
-    .controls-scroll::-webkit-scrollbar-thumb{ background:#2a3955; border-radius:8px; }
-    .controls-scroll::-webkit-scrollbar-track{ background:#0b1020; }
   </style>
 </head>
 <body>
@@ -221,7 +206,6 @@
       <div class="sub">Drag & drop your logo and photos • Add text • Position, tilt, and save templates</div>
     </div>
 
-    <!-- Expandable Actions: minimized by default -->
     <details class="actions-card" id="actions-details">
       <summary>Export &amp; Save</summary>
       <div class="head-actions">
@@ -236,7 +220,6 @@
       </div>
     </details>
 
-    <!-- Default tab = Controls (mobile) -->
     <div class="mobile-tabs" role="tablist" aria-label="View switch">
       <button class="tab" id="tab-preview" aria-selected="false">Preview</button>
       <button class="tab active" id="tab-controls" aria-selected="true">Controls</button>
@@ -244,11 +227,10 @@
   </header>
 
   <div class="wrap">
-    <!-- LEFT / PANEL: CONTROLS -->
+    <!-- LEFT: CONTROLS -->
     <div class="col controls-panel pane active" id="pane-controls" aria-labelledby="tab-controls">
       <div class="controls-scroll">
 
-        <!-- 1) Templates (OPEN by default) -->
         <details class="card templates" open>
           <summary>Templates</summary>
           <div class="body">
@@ -266,7 +248,6 @@
           </div>
         </details>
 
-        <!-- 2) Watermark (Logo) (MINIMIZED by default) -->
         <details class="card watermark">
           <summary>Watermark (Logo)</summary>
           <div class="body">
@@ -276,7 +257,6 @@
               <input id="logo-input" type="file" accept="image/*" style="display:none" />
             </div>
 
-            <!-- Logo thumbnail (reduced size) -->
             <div class="thumbs" id="logo-thumbs"></div>
 
             <div class="controls">
@@ -318,7 +298,6 @@
           </div>
         </details>
 
-        <!-- 3) Photos (MINIMIZED by default) -->
         <details class="card photos">
           <summary>Photos</summary>
           <div class="body">
@@ -331,7 +310,6 @@
           </div>
         </details>
 
-        <!-- 4) Text Watermark (MINIMIZED by default) -->
         <details class="card textmark">
           <summary>Text Watermark</summary>
           <div class="body">
@@ -402,11 +380,11 @@
       </div>
     </div>
 
-    <!-- RIGHT / PANE: PREVIEW -->
+    <!-- RIGHT: PREVIEW -->
     <div class="col pane" id="pane-preview" aria-labelledby="tab-preview">
-      <div class="card" style="min-height:0; height:100%;">
+      <div class="card">
         <h2>Preview</h2>
-        <div class="body" style="height: calc(100% - 44px);">
+        <div class="body">
           <div class="preview" id="preview">
             <div class="zoombar" id="zoombar">
               <button class="zbtn" id="zoom-out" title="Zoom out (Ctrl/⌘ + scroll)">−</button>
@@ -418,25 +396,28 @@
             <canvas id="canvas"></canvas>
           </div>
 
-          <div class="row">
-            <div class="muted">Format</div>
-            <!-- CHANGED: default to JPEG -->
-            <select id="format">
-              <option value="image/jpeg" selected>JPEG</option>
-              <option value="image/png">PNG</option>
-            </select>
+          <!-- Sticky footer: always reachable, no hidden scrollbar surprise -->
+          <div class="sticky-footer">
+            <div class="row">
+              <div class="muted">Format</div>
+              <select id="format">
+                <option value="image/jpeg" selected>JPEG</option>
+                <option value="image/png">PNG</option>
+              </select>
+            </div>
           </div>
+
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Optional zipping for batch export -->
+  <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
   <script>
-    /* Header height calibration (updates if actions are expanded) */
+    /* Header height calibration for sticky layout (kept for completeness) */
     (function calibrateHeader() {
       const header = document.getElementById('appHeader');
       const set = () => {
@@ -633,7 +614,7 @@
     function setTextAbs(x, y){ const b = textBasePos(); state.text.offsetX = Math.round(x - b.x); state.text.offsetY = Math.round(y - b.y); txtOffXEl.value = state.text.offsetX; txtOffYEl.value = state.text.offsetY; raf(draw); }
     function setTextAnchorSnap(newAnchor){ state.text.anchor = newAnchor; state.text.offsetX = 0; state.text.offsetY = 0; txtOffXEl.value = 0; txtOffYEl.value = 0; raf(draw); }
 
-    // ---------- Zoom (preview-only) ----------
+    // ---------- Zoom ----------
     function computeFitZoom(){
       if (!canvas.width || !canvas.height) return 1;
       const pad = 16;
@@ -656,7 +637,6 @@
       ctx.clearRect(0,0,canvas.width,canvas.height);
       if (!photo) { applyZoom(); return; }
 
-      // render at native resolution (preview zoom is CSS-only)
       canvas.width = photo.img.naturalWidth;
       canvas.height = photo.img.naturalHeight;
 
@@ -928,8 +908,8 @@
       saveAs(out, 'watermarked_photos.zip');
     }
 
-    exportBtn.addEventListener('click', downloadCurrent);
-    exportAllBtn.addEventListener('click', processAllZip);
+    document.getElementById('btn-export').addEventListener('click', downloadCurrent);
+    document.getElementById('btn-export-all').addEventListener('click', processAllZip);
 
     // ---------- Save-to-folder helpers ----------
     function fsSupported(){ return 'showDirectoryPicker' in window; }
@@ -1124,13 +1104,12 @@
       txtOffYEl.value = state.text.offsetY;
     }
 
-    // Init
     (function init(){
       renderLogoThumb();
       refreshPhotoThumbs();
       syncControls();
       renderTplList();
-      setZoom(1, 'fit'); // preview zoom is visual only
+      setZoom(1, 'fit');
     })();
   </script>
 </body>
