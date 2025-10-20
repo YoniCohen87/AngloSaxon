@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Property Sheet – Panel Controls (Left) + Sideways Collapse (Header Box +10px)</title>
+<style>
+  :root{
+    --page-bg:#2c2d59;
+    --accent:#ffea00;
+
+    /* Logo + safe zone */
+    --logo-w:85px;
+    --logo-gap:14px;
+    --safe-left: calc(15px + var(--logo-w) + var(--logo-gap));
+    --page-pad:20px;
+
+    /* Footer + text caps */
+    --footer-safe:   38mm;
+    --hebrew-max: 44mm;
+    --english-max:46mm;
+  }
+
+  html,body{margin:0;background:#777;color:#fff;font-family:Arial,Helvetica,sans-serif}
+  .page-wrap{
+    display:flex; gap:16px; align-items:flex-start; justify-content:center; padding:0 8px 24px;
+  }
+  .container{
+    width:210mm;height:297mm;margin:20px auto 12px;padding:var(--page-pad);
+    background:var(--page-bg);position:relative;box-sizing:border-box;overflow:hidden;
+  }
+
+  /* Logo */
+  .logo{position:absolute;top:15px;left:15px;width:var(--logo-w);height:auto}
+
+  /* Header */
+  .header{
+    width:100%; margin-top:10px; padding-left: var(--safe-left);
+    box-sizing:border-box; display:flex; justify-content:center;
+    transform: translate(0px, 0px); /* moved via controls */
+    padding-bottom: 10px; /* Make the header BOX 10px taller by default */
+  }
+  #header-text{
+    width:94%;
+    max-width: calc(100% - var(--safe-left) - 20px);
+    background:var(--page-bg); color:#fff; border:0;
+    font-size:46px; line-height:1.12; text-align:center;
+    resize:none; overflow:hidden; white-space:normal; word-break:break-word;
+    padding:0; margin:0 auto; box-sizing:border-box;
+    /* removed forced height; allow content to define height */
+  }
+
+  /* ---------- GALLERY ---------- */
+  .gallery{
+    margin-top:12px;
+    transform-origin: top left; /* scale + move as one unit */
+    transform: translate(0px, 0px) scale(1);
+  }
+
+  .main-frame{
+    width:100%;
+    box-sizing:border-box; overflow:hidden; display:block;
+  }
+  .main-frame img{
+    display:block;
+    width:100%;
+    height:100%;
+    object-fit:fill;
+    border:2px solid var(--accent);
+    box-sizing:border-box;
+  }
+
+  .small-row{
+    width:100%;
+    display:grid; grid-template-columns:repeat(3,1fr); gap:0;
+    box-sizing:border-box;
+  }
+  .thumb-cell{
+    width:100%;
+    overflow:hidden;
+    position:relative;
+  }
+  .thumb-cell img{
+    display:block;
+    width:100%;
+    height:100%;
+    object-fit:fill;
+    cursor:pointer;
+    border:2px solid var(--accent);
+    box-sizing:border-box;
+  }
+
+  /* ---------- Text boxes on RIGHT side ---------- */
+  .hebrew-text,.english-text{margin:16px 0; display:flex; justify-content:flex-end}
+  .english-text{ margin-bottom: var(--footer-safe); }
+  .hebrew-text, .english-text { transform: translate(0px, 0px); }
+
+  .textarea{
+    width:100%; max-width:80%;
+    background:var(--page-bg); color:#fff; border:1px solid #fff; /* UI only */
+    font-size:20px; resize:none; overflow:hidden;
+    overflow-wrap:break-word; word-wrap:break-word; box-sizing:border-box;
+  }
+  #hebrew-text{ direction:rtl; text-align:right; margin-left:auto; margin-right:0; max-height:var(--hebrew-max); }
+  #english-text{ direction:ltr; text-align:right; margin-left:auto; margin-right:0; max-height:var(--english-max); }
+
+  /* Footer */
+  .agent-image{ position:absolute; bottom:10px; left:10px; width:90px }
+  .contact-details{ position:absolute; bottom:10px; left:115px; width:440px }
+  .contact-details textarea{ font-size:10px; text-align:left; width:100%; border:none; overflow:hidden }
+
+  /* ======= Left Side Panel (light gray), sideways collapse ======= */
+  .side-panel{
+    position:sticky; top:20px;
+    --panel-open-w: 340px;
+    --panel-closed-w: 46px;
+    width:var(--panel-open-w); max-height:calc(100vh - 40px);
+    background:#f2f2f2; color:#111; border:1px solid #ddd; border-radius:10px;
+    box-shadow:0 6px 16px rgba(0,0,0,.15);
+    overflow:hidden; display:flex; flex-direction:column;
+    transition: width .25s ease;
+  }
+  .side-panel.collapsed{ width:var(--panel-closed-w); }
+  .sp-header{
+    padding:10px 10px; background:#e6e6e6; display:flex; align-items:center; justify-content:space-between;
+    border-bottom:1px solid #ddd; font-weight:bold;
+  }
+  .sp-title{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .sp-toggle{
+    cursor:pointer; border:0; background:#ddd; padding:6px 8px; border-radius:6px; width:28px; height:28px;
+    display:flex; align-items:center; justify-content:center; font-weight:bold;
+  }
+  .sp-body{
+    padding:12px; overflow:auto; transition: opacity .2s ease;
+  }
+  .side-panel.collapsed .sp-body{ opacity:0; pointer-events:none; }
+
+  .sp-section{ margin-bottom:16px; padding-bottom:12px; border-bottom:1px dashed #ccc; }
+  .sp-section h4{ margin:0 0 8px; font-size:14px; }
+
+  .row{ display:flex; gap:8px; align-items:center; margin:6px 0; }
+  .row label{ width:110px; font-size:12px; }
+  .row input[type=range]{ flex:1; }
+  .row input[type=number]{ width:70px; }
+  .row select{ flex:1; }
+
+  .nudge-grid{ display:grid; grid-template-columns:repeat(3,34px); gap:4px; }
+  .nudge-grid button{ height:32px; background:#fff; border:1px solid #ccc; border-radius:6px; cursor:pointer; }
+  .mini{ font-size:12px; color:#444; }
+  .reset-btn{ background:#c62828; color:#fff; border:0; padding:10px 12px; border-radius:8px; cursor:pointer; width:100%; }
+
+  /* Dropzones inside panel */
+  .dropzone{border:2px dashed #bbb;padding:10px 12px;color:#555;font-size:13px;border-radius:8px;background:#fafafa}
+  .dropzone.highlight{border-color:#4CAF50}
+  .btn-primary{display:inline-block;padding:10px 12px;background:#4CAF50;color:#fff;border:0;border-radius:8px;cursor:pointer}
+</style>
+</head>
+<body>
+
+<div class="page-wrap">
+  <!-- Left-side light-gray panel -->
+  <aside class="side-panel" id="side-panel">
+    <div class="sp-header">
+      <span class="sp-title">⚙ Layout & Export</span>
+      <button class="sp-toggle" id="sp-toggle" aria-expanded="true" title="Collapse">⟨</button>
+    </div>
+    <div class="sp-body" id="sp-body">
+
+      <!-- TOP: Export first -->
+      <div class="sp-section">
+        <h4>Export</h4>
+        <div class="row">
+          <label for="export-type">Export as</label>
+          <select id="export-type">
+            <option value="png" selected>PNG</option>
+            <option value="jpeg">JPEG</option>
+            <option value="pdf">PDF (A4)</option>
+          </select>
+          <button class="btn-primary" onclick="exportSlide()">Export</button>
+        </div>
+      </div>
+
+      <!-- Uploads next -->
+      <div class="sp-section">
+        <h4>Gallery Images</h4>
+        <div class="row">
+          <label>Upload</label>
+          <input type="file" id="upload-images" accept="image/*" multiple/>
+        </div>
+        <div id="gallery-dropzone" class="dropzone">Drop up to 4 images (first = main, next 3 = small)</div>
+      </div>
+
+      <div class="sp-section">
+        <h4>Agent Image</h4>
+        <div class="row">
+          <label>Upload</label>
+          <input type="file" id="upload-agent-image" accept="image/*"/>
+        </div>
+        <div id="agent-dropzone" class="dropzone">Drop agent image here</div>
+      </div>
+
+      <!-- Font sizes -->
+      <div class="sp-section">
+        <h4>Font Sizes</h4>
+        <div class="row">
+          <label for="fs-header">Header</label>
+          <input type="range" id="fs-header" min="22" max="72" step="1" />
+          <input type="number" id="fs-header-num" min="22" max="72" step="1" />
+        </div>
+        <div class="row">
+          <label for="fs-hebrew">Hebrew</label>
+          <input type="range" id="fs-hebrew" min="12" max="48" step="1" />
+          <input type="number" id="fs-hebrew-num" min="12" max="48" step="1" />
+        </div>
+        <div class="row">
+          <label for="fs-english">English</label>
+          <input type="range" id="fs-english" min="12" max="48" step="1" />
+          <input type="number" id="fs-english-num" min="12" max="48" step="1" />
+        </div>
+        <div class="mini">Header box is +10px taller by default; header font size is manual. Hebrew/English auto-extend heights.</div>
+      </div>
+
+      <!-- Text box positions -->
+      <div class="sp-section">
+        <h4>Move Text Boxes</h4>
+
+        <div class="row"><strong>Header</strong></div>
+        <div class="row">
+          <label>Offset (px)</label>
+          X <input type="number" id="pos-header-x" step="1" value="0"/>
+          Y <input type="number" id="pos-header-y" step="1" value="0"/>
+        </div>
+        <div class="nudge-grid">
+          <span></span><button id="nudge-header-up">↑</button><span></span>
+          <button id="nudge-header-left">←</button><span></span><button id="nudge-header-right">→</button>
+          <span></span><button id="nudge-header-down">↓</button><span></span>
+        </div>
+
+        <div class="row" style="margin-top:10px;"><strong>Hebrew</strong></div>
+        <div class="row">
+          <label>Offset (px)</label>
+          X <input type="number" id="pos-hebrew-x" step="1" value="0"/>
+          Y <input type="number" id="pos-hebrew-y" step="1" value="0"/>
+        </div>
+        <div class="nudge-grid">
+          <span></span><button id="nudge-hebrew-up">↑</button><span></span>
+          <button id="nudge-hebrew-left">←</button><span></span><button id="nudge-hebrew-right">→</button>
+          <span></span><button id="nudge-hebrew-down">↓</button><span></span>
+        </div>
+
+        <div class="row" style="margin-top:10px;"><strong>English</strong></div>
+        <div class="row">
+          <label>Offset (px)</label>
+          X <input type="number" id="pos-english-x" step="1" value="0"/>
+          Y <input type="number" id="pos-english-y" step="1" value="0"/>
+        </div>
+        <div class="nudge-grid">
+          <span></span><button id="nudge-english-up">↑</button><span></span>
+          <button id="nudge-english-left">←</button><span></span><button id="nudge-english-right">→</button>
+          <span></span><button id="nudge-english-down">↓</button><span></span>
+        </div>
+        <div class="row">
+          <label>Nudge step</label>
+          <input type="number" id="nudge-step" value="2" min="1" max="20" step="1"/>
+          <span class="mini">px per click</span>
+        </div>
+      </div>
+
+      <!-- Image group controls -->
+      <div class="sp-section">
+        <h4>Images (All 4 as a Group)</h4>
+        <div class="row">
+          <label>Scale (%)</label>
+          <input type="range" id="img-scale" min="70" max="130" step="1" />
+          <input type="number" id="img-scale-num" min="70" max="130" step="1" />
+        </div>
+        <div class="row">
+          <label>Offset (px)</label>
+          X <input type="number" id="img-x" step="1" value="0"/>
+          Y <input type="number" id="img-y" step="1" value="0"/>
+        </div>
+        <div class="nudge-grid">
+          <span></span><button id="nudge-img-up">↑</button><span></span>
+          <button id="nudge-img-left">←</button><span></span><button id="nudge-img-right">→</button>
+          <span></span><button id="nudge-img-down">↓</button><span></span>
+        </div>
+        <div class="mini">Scaling preserves ratios & alignment; borders keep hugging.</div>
+      </div>
+
+      <button class="reset-btn" id="reset-all">Reset to Default</button>
+    </div>
+  </aside>
+
+  <!-- Main A4 sheet -->
+  <div class="container" id="presentation-slide">
+    <!-- Logo -->
+    <img id="logo" class="logo" src="https://yonicohen87.github.io/AngloSaxon/new%20logo.jpg" alt="Logo"/>
+
+    <!-- Header -->
+    <div class="header" id="header-wrap">
+      <textarea id="header-text" class="textarea" placeholder="Enter header"></textarea>
+    </div>
+
+    <!-- Gallery -->
+    <div class="gallery" id="gallery">
+      <div class="main-frame" id="main-frame"><img id="main-image" src="" alt="Main image"/></div>
+      <div class="small-row" id="small-row"></div>
+    </div>
+
+    <!-- Hebrew / English -->
+    <div class="hebrew-text" id="hebrew-wrap">
+      <textarea id="hebrew-text" class="textarea" placeholder="תיאור הנכס בעברית"></textarea>
+    </div>
+
+    <div class="english-text" id="english-wrap">
+      <textarea id="english-text" class="textarea" placeholder="English description"></textarea>
+    </div>
+
+    <!-- Footer -->
+    <img id="agent-image" class="agent-image" src="" alt="Agent"/>
+    <div class="contact-details">
+      <textarea id="contact-details" class="textarea" placeholder="Name – Title – Phone
+email@example.com"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- libs -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<script>
+/* ===============================
+   TEXT HEIGHT FIT (header: free height; others auto-fit)
+================================ */
+function fitTextAreaHeight(el){
+  if(el.id === 'header-text'){ return; } // header height is free; no cap logic here
+  el.style.height = 'auto';
+  const cap = parseFloat(getComputedStyle(el).maxHeight) || Infinity;
+  const h = Math.min(el.scrollHeight, cap);
+  el.style.height = h + 'px';
+}
+['hebrew-text','english-text','contact-details'].forEach(id=>{
+  const el = document.getElementById(id);
+  el.addEventListener('input', ()=>fitTextAreaHeight(el));
+  setTimeout(()=>fitTextAreaHeight(el), 0);
+});
+
+/* ===============================
+   IMAGE FIT: border hugs pixels, full image visible
+================================ */
+function fitImageBox(img){
+  const ar = img.naturalHeight / img.naturalWidth;
+  if(!isFinite(ar) || ar <= 0) return;
+  const frame = img.parentElement;
+  const w = frame.clientWidth;
+  const h = Math.round(w * ar);
+  frame.style.height = h + 'px';
+  img.style.height = '100%';
+}
+function relayoutAll(){
+  const main = document.getElementById('main-image');
+  if(main.complete && main.naturalWidth) fitImageBox(main);
+  document.querySelectorAll('.thumb-cell img').forEach(im=>{
+    if(im.complete && im.naturalWidth) fitImageBox(im);
+  });
+}
+window.addEventListener('resize', relayoutAll);
+
+/* ========== Image loaders ========== */
+function filesToArray(list,max){const a=Array.from(list||[]);return max?a.slice(0,max):a;}
+function loadGalleryFiles(files){
+  const mainImg=document.getElementById('main-image');
+  const row=document.getElementById('small-row');
+  row.innerHTML='';
+  const list=filesToArray(files,4);
+  if(!list.length) return;
+
+  // Main image
+  const r0=new FileReader();
+  r0.onload=()=>{
+    mainImg.onload=()=>{ fitImageBox(mainImg); };
+    mainImg.src=r0.result;
+  };
+  r0.readAsDataURL(list[0]);
+
+  // Thumbnails
+  list.slice(1).forEach(file=>{
+    const r=new FileReader();
+    r.onload=()=>{
+      const cell=document.createElement('div');
+      cell.className='thumb-cell';
+      const img=document.createElement('img');
+      img.onload=()=>{ fitImageBox(img); };
+      img.src=r.result; img.alt='Small';
+      img.addEventListener('click',()=>switchImages(img.src));
+      cell.appendChild(img);
+      row.appendChild(cell);
+    };
+    r.readAsDataURL(file);
+  });
+}
+function loadAgentFile(file){
+  if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{ document.getElementById('agent-image').src=r.result; };
+  r.readAsDataURL(file);
+}
+document.getElementById('upload-images').addEventListener('change',e=>loadGalleryFiles(e.target.files));
+document.getElementById('upload-agent-image').addEventListener('change',e=>loadAgentFile(e.target.files[0]));
+
+/* Drag & drop */
+function makeDropzone(el,onFiles){
+  const stop=e=>{e.preventDefault();e.stopPropagation();};
+  ['dragenter','dragover','dragleave','drop'].forEach(evt=>el.addEventListener(evt,stop,false));
+  ['dragenter','dragover'].forEach(evt=>el.addEventListener(evt,()=>el.classList.add('highlight'),false));
+  ['dragleave','drop'].forEach(evt=>el.addEventListener(evt,()=>el.classList.remove('highlight'),false));
+  el.addEventListener('drop',ev=>{const dt=ev.dataTransfer;if(!dt)return;onFiles(dt.files);},false);
+}
+makeDropzone(document.getElementById('gallery-dropzone'),files=>loadGalleryFiles(files));
+makeDropzone(document.getElementById('agent-dropzone'),files=>loadAgentFile(files[0]));
+
+/* Swap main/small on click */
+function switchImages(src){
+  const main=document.getElementById('main-image');
+  const thumbs=document.querySelectorAll('.thumb-cell img');
+  for(let i=0;i<thumbs.length;i++){
+    if(thumbs[i].src===src){ const t=main.src; main.src=src; thumbs[i].src=t; break; }
+  }
+  relayoutAll();
+}
+
+/* =========================
+   EXPORT (UI == export)
+========================= */
+function snapshotTextareaStyles(){
+  const snap={};
+  document.querySelectorAll('textarea').forEach(el=>{
+    const cs=getComputedStyle(el);
+    snap[el.id]={
+      width:cs.width,height:cs.height,fontSize:cs.fontSize,lineHeight:cs.lineHeight,
+      textAlign:cs.textAlign,direction:cs.direction,maxWidth:cs.maxWidth,margin:cs.margin,
+      fontFamily:cs.fontFamily,fontWeight:cs.fontWeight
+    };
+  });
+  return snap;
+}
+function convertTextareasToDivs(root,snap){
+  root.querySelectorAll('textarea').forEach(el=>{
+    const div=document.createElement('div'); div.className=el.className;
+    const s=snap[el.id]||getComputedStyle(el);
+    div.style.cssText=el.style.cssText||'';
+    div.style.border='none';
+    div.style.width=s.width; div.style.maxWidth=s.maxWidth; div.style.margin=s.margin;
+    div.style.lineHeight=s.lineHeight; div.style.fontSize=s.fontSize; div.style.fontFamily=s.fontFamily; div.style.fontWeight=s.fontWeight;
+    div.style.whiteSpace='normal'; div.style.wordBreak='break-word'; div.style.height=s.height; div.style.overflow='hidden';
+    div.innerHTML=(el.value||'').replace(/\n/g,'<br>');
+    if(el.id==='hebrew-text'){div.style.direction='rtl';div.style.textAlign='right';}
+    if(el.id==='english-text'){div.style.direction='ltr';div.style.textAlign='right';}
+    if(el.id==='header-text'){div.style.textAlign='center';div.style.direction='ltr';}
+    if(el.id==='contact-details'){div.style.fontSize='10px';div.style.textAlign='left';}
+    el.parentNode.replaceChild(div,el);
+  });
+}
+function exportSlide(){
+  const type=(document.getElementById('export-type').value||'png').toLowerCase();
+  const container=document.getElementById('presentation-slide');
+  const clone=container.cloneNode(true);
+  clone.id='presentation-slide-export';
+  clone.style.position='fixed'; clone.style.left='-100000px'; clone.style.top='0';
+
+  // Copy textarea values
+  document.querySelectorAll('textarea').forEach(live=>{
+    const twin=clone.querySelector('#'+live.id);
+    if(twin) twin.value=live.value;
+  });
+
+  // Ensure export has the same computed heights
+  clone.querySelectorAll('.main-frame, .thumb-cell').forEach((el,i)=>{
+    const live = i===0 ? document.querySelector('.main-frame') : document.querySelectorAll('.thumb-cell')[i-1];
+    if(live){ el.style.height = getComputedStyle(live).height; }
+  });
+
+  // Carry over transforms on header/hebrew/english/gallery
+  ['header-wrap','hebrew-wrap','english-wrap','gallery'].forEach(id=>{
+    const liveEl=document.getElementById(id);
+    const cloneEl=clone.querySelector('#'+id);
+    if(liveEl && cloneEl){
+      cloneEl.style.transform = getComputedStyle(liveEl).transform;
+      cloneEl.style.transformOrigin = getComputedStyle(liveEl).transformOrigin;
+    }
+  });
+
+  const snap=snapshotTextareaStyles();
+  convertTextareasToDivs(clone,snap);
+
+  document.body.appendChild(clone);
+  setTimeout(()=>{
+    html2canvas(clone,{
+      width:container.offsetWidth,height:container.offsetHeight,
+      backgroundColor:getComputedStyle(container).backgroundColor||'#2c2d59',
+      scale:window.devicePixelRatio,useCORS:true
+    }).then(canvas=>{
+      if(type==='png'||type==='jpeg'){
+        const mime=(type==='jpeg')?'image/jpeg':'image/png';
+        const dataURL=canvas.toDataURL(mime, type==='jpeg'?0.92:undefined);
+        const a=document.createElement('a'); a.href=dataURL; a.download=`presentation.${type==='jpeg'?'jpg':'png'}`; a.click();
+      }else{
+        const { jsPDF }=window.jspdf;
+        const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+        const w=pdf.internal.pageSize.getWidth(), h=pdf.internal.pageSize.getHeight();
+        pdf.addImage(canvas.toDataURL('image/png'),'PNG',0,0,w,h);
+        pdf.save('presentation.pdf');
+      }
+    }).finally(()=>document.body.removeChild(clone));
+  },30);
+}
+
+/* =========================
+   NEW: Side Panel Logic (left, sideways collapse)
+========================= */
+const state = {
+  header: { fsDefault: 46, fs: 46, x:0, y:0 },
+  hebrew: { fsDefault: 20, fs: 20, x:0, y:0 },
+  english:{ fsDefault: 20, fs: 20, x:0, y:0 },
+  gallery:{ scaleDefault: 100, scale:100, x:0, y:0 }
+};
+
+const els = {
+  headerTA: document.getElementById('header-text'),
+  hebrewTA: document.getElementById('hebrew-text'),
+  englishTA: document.getElementById('english-text'),
+  headerWrap: document.getElementById('header-wrap'),
+  hebrewWrap: document.getElementById('hebrew-wrap'),
+  englishWrap: document.getElementById('english-wrap'),
+  gallery: document.getElementById('gallery')
+};
+
+// Panel sideways collapse/expand
+(function initPanelToggle(){
+  const panel = document.getElementById('side-panel');
+  const btn = document.getElementById('sp-toggle');
+  let open = true;
+  const setOpen = (v)=>{
+    open = v;
+    panel.classList.toggle('collapsed', !open);
+    btn.setAttribute('aria-expanded', String(open));
+    btn.textContent = open ? '⟨' : '⟩'; // points toward the page when open
+    btn.title = open ? 'Collapse' : 'Expand';
+  };
+  btn.addEventListener('click', ()=>setOpen(!open));
+  setOpen(true);
+})();
+
+/* Helpers */
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function applyTransforms(){
+  els.headerWrap.style.transform = `translate(${state.header.x}px, ${state.header.y}px)`;
+  els.hebrewWrap.style.transform = `translate(${state.hebrew.x}px, ${state.hebrew.y}px)`;
+  els.englishWrap.style.transform = `translate(${state.english.x}px, ${state.english.y}px)`;
+  els.gallery.style.transform = `translate(${state.gallery.x}px, ${state.gallery.y}px) scale(${state.gallery.scale/100})`;
+}
+function setFont(el, target, px){
+  px = Math.round(px);
+  target.fs = px;
+  el.style.fontSize = px + 'px';
+  if(el.id !== 'header-text'){ // header height free; others auto-fit
+    fitTextAreaHeight(el);
+  }
+}
+
+/* Bind font size controls */
+(function initFontSizeControls(){
+  const initFromComputed = (ta, r, n, fallback)=>{
+    const fs = parseFloat(getComputedStyle(ta).fontSize) || fallback;
+    r.value = fs; n.value = fs; return fs;
+  };
+
+  // Header
+  const rH = document.getElementById('fs-header');
+  const nH = document.getElementById('fs-header-num');
+  state.header.fs = initFromComputed(els.headerTA, rH, nH, state.header.fsDefault);
+  const syncH = v => { v = clamp(v, +rH.min, +rH.max); rH.value=v; nH.value=v; setFont(els.headerTA, state.header, v); };
+  rH.addEventListener('input', e=>syncH(+e.target.value));
+  nH.addEventListener('input', e=>syncH(+e.target.value));
+
+  // Hebrew
+  const rHe = document.getElementById('fs-hebrew');
+  const nHe = document.getElementById('fs-hebrew-num');
+  state.hebrew.fs = initFromComputed(els.hebrewTA, rHe, nHe, state.hebrew.fsDefault);
+  const syncHe = v => { v = clamp(v, +rHe.min, +rHe.max); rHe.value=v; nHe.value=v; setFont(els.hebrewTA, state.hebrew, v); };
+  rHe.addEventListener('input', e=>syncHe(+e.target.value));
+  nHe.addEventListener('input', e=>syncHe(+e.target.value));
+
+  // English
+  const rEn = document.getElementById('fs-english');
+  const nEn = document.getElementById('fs-english-num');
+  state.english.fs = initFromComputed(els.englishTA, rEn, nEn, state.english.fsDefault);
+  const syncEn = v => { v = clamp(v, +rEn.min, +rEn.max); rEn.value=v; nEn.value=v; setFont(els.englishTA, state.english, v); };
+  rEn.addEventListener('input', e=>syncEn(+e.target.value));
+  nEn.addEventListener('input', e=>syncEn(+e.target.value));
+})();
+
+/* Bind text position controls */
+(function initTextPositionControls(){
+  const stepEl = document.getElementById('nudge-step');
+  const getStep = ()=> parseInt(stepEl.value||'2',10);
+
+  // Header
+  const xH = document.getElementById('pos-header-x');
+  const yH = document.getElementById('pos-header-y');
+  function syncHeaderXY(){ state.header.x=+xH.value||0; state.header.y=+yH.value||0; applyTransforms(); }
+  xH.addEventListener('input', syncHeaderXY);
+  yH.addEventListener('input', syncHeaderXY);
+  document.getElementById('nudge-header-up').addEventListener('click', ()=>{ yH.value = (+yH.value||0) - getStep(); syncHeaderXY(); });
+  document.getElementById('nudge-header-down').addEventListener('click', ()=>{ yH.value = (+yH.value||0) + getStep(); syncHeaderXY(); });
+  document.getElementById('nudge-header-left').addEventListener('click', ()=>{ xH.value = (+xH.value||0) - getStep(); syncHeaderXY(); });
+  document.getElementById('nudge-header-right').addEventListener('click', ()=>{ xH.value = (+xH.value||0) + getStep(); syncHeaderXY(); });
+
+  // Hebrew
+  const xHe = document.getElementById('pos-hebrew-x');
+  const yHe = document.getElementById('pos-hebrew-y');
+  function syncHebXY(){ state.hebrew.x=+xHe.value||0; state.hebrew.y=+yHe.value||0; applyTransforms(); }
+  xHe.addEventListener('input', syncHebXY);
+  yHe.addEventListener('input', syncHebXY);
+  document.getElementById('nudge-hebrew-up').addEventListener('click', ()=>{ yHe.value = (+yHe.value||0) - getStep(); syncHebXY(); });
+  document.getElementById('nudge-hebrew-down').addEventListener('click', ()=>{ yHe.value = (+yHe.value||0) + getStep(); syncHebXY(); });
+  document.getElementById('nudge-hebrew-left').addEventListener('click', ()=>{ xHe.value = (+xHe.value||0) - getStep(); syncHebXY(); });
+  document.getElementById('nudge-hebrew-right').addEventListener('click', ()=>{ xHe.value = (+xHe.value||0) + getStep(); syncHebXY(); });
+
+  // English
+  const xEn = document.getElementById('pos-english-x');
+  const yEn = document.getElementById('pos-english-y');
+  function syncEngXY(){ state.english.x=+xEn.value||0; state.english.y=+yEn.value||0; applyTransforms(); }
+  xEn.addEventListener('input', syncEngXY);
+  yEn.addEventListener('input', syncEngXY);
+  document.getElementById('nudge-english-up').addEventListener('click', ()=>{ yEn.value = (+yEn.value||0) - getStep(); syncEngXY(); });
+  document.getElementById('nudge-english-down').addEventListener('click', ()=>{ yEn.value = (+yEn.value||0) + getStep(); syncEngXY(); });
+  document.getElementById('nudge-english-left').addEventListener('click', ()=>{ xEn.value = (+xEn.value||0) - getStep(); syncEngXY(); });
+  document.getElementById('nudge-english-right').addEventListener('click', ()=>{ xEn.value = (+xEn.value||0) + getStep(); syncEngXY(); });
+})();
+
+/* Bind image group controls */
+(function initImageGroupControls(){
+  const r = document.getElementById('img-scale');
+  const n = document.getElementById('img-scale-num');
+  const x = document.getElementById('img-x');
+  const y = document.getElementById('img-y');
+  const stepEl = document.getElementById('nudge-step');
+  const getStep = ()=> parseInt(stepEl.value||'2',10);
+
+  r.value = state.gallery.scale; n.value = state.gallery.scale;
+  function syncScale(v){
+    v = clamp(v, +r.min, +r.max);
+    r.value=v; n.value=v; state.gallery.scale=v; applyTransforms(); relayoutAll();
+  }
+  r.addEventListener('input', e=>syncScale(+e.target.value));
+  n.addEventListener('input', e=>syncScale(+e.target.value));
+
+  function syncXY(){
+    state.gallery.x = +x.value||0;
+    state.gallery.y = +y.value||0;
+    applyTransforms(); relayoutAll();
+  }
+  x.addEventListener('input', syncXY);
+  y.addEventListener('input', syncXY);
+
+  document.getElementById('nudge-img-up').addEventListener('click', ()=>{ y.value = (+y.value||0) - getStep(); syncXY(); });
+  document.getElementById('nudge-img-down').addEventListener('click', ()=>{ y.value = (+y.value||0) + getStep(); syncXY(); });
+  document.getElementById('nudge-img-left').addEventListener('click', ()=>{ x.value = (+x.value||0) - getStep(); syncXY(); });
+  document.getElementById('nudge-img-right').addEventListener('click', ()=>{ x.value = (+x.value||0) + getStep(); syncXY(); });
+})();
+
+/* Reset */
+document.getElementById('reset-all').addEventListener('click', ()=>{
+  // Fonts
+  state.header.fs = state.header.fsDefault;
+  state.hebrew.fs = state.hebrew.fsDefault;
+  state.english.fs = state.english.fsDefault;
+  document.getElementById('fs-header').value = state.header.fs;
+  document.getElementById('fs-header-num').value = state.header.fs;
+  document.getElementById('fs-hebrew').value = state.hebrew.fs;
+  document.getElementById('fs-hebrew-num').value = state.hebrew.fs;
+  document.getElementById('fs-english').value = state.english.fs;
+  document.getElementById('fs-english-num').value = state.english.fs;
+  setFont(els.headerTA, state.header, state.header.fs);
+  setFont(els.hebrewTA, state.hebrew, state.hebrew.fs);
+  setFont(els.englishTA, state.english, state.english.fs);
+
+  // Positions
+  state.header.x = state.header.y = 0;
+  state.hebrew.x = state.hebrew.y = 0;
+  state.english.x = state.english.y = 0;
+  state.gallery.x = state.gallery.y = 0;
+  document.getElementById('pos-header-x').value = 0;
+  document.getElementById('pos-header-y').value = 0;
+  document.getElementById('pos-hebrew-x').value = 0;
+  document.getElementById('pos-hebrew-y').value = 0;
+  document.getElementById('pos-english-x').value = 0;
+  document.getElementById('pos-english-y').value = 0;
+  document.getElementById('img-x').value = 0;
+  document.getElementById('img-y').value = 0;
+
+  // Image scale
+  state.gallery.scale = state.gallery.scaleDefault;
+  document.getElementById('img-scale').value = state.gallery.scale;
+  document.getElementById('img-scale-num').value = state.gallery.scale;
+
+  applyTransforms();
+  relayoutAll();
+});
+
+/* Initial apply */
+applyTransforms();
+</script>
+</body>
+</html>
