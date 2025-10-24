@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Property Sheet – Panel Controls (Left) + Sideways Collapse (Header Box +10px)</title>
+<title>Property Sheet – Panel Controls (Left) + Sideways Collapse + English Box Right / Text Left</title>
 <style>
   :root{
     --page-bg:#2c2d59;
@@ -47,7 +47,6 @@
     font-size:46px; line-height:1.12; text-align:center;
     resize:none; overflow:hidden; white-space:normal; word-break:break-word;
     padding:0; margin:0 auto; box-sizing:border-box;
-    /* removed forced height; allow content to define height */
   }
 
   /* ---------- GALLERY ---------- */
@@ -102,7 +101,8 @@
     overflow-wrap:break-word; word-wrap:break-word; box-sizing:border-box;
   }
   #hebrew-text{ direction:rtl; text-align:right; margin-left:auto; margin-right:0; max-height:var(--hebrew-max); }
-  #english-text{ direction:ltr; text-align:right; margin-left:auto; margin-right:0; max-height:var(--english-max); }
+  /* Keep the English text box positioned on the right like before, but text inside is LTR + left aligned */
+  #english-text{ direction:ltr; text-align:left; margin-left:auto; margin-right:0; max-height:var(--english-max); }
 
   /* Footer */
   .agent-image{ position:absolute; bottom:10px; left:10px; width:90px }
@@ -456,7 +456,7 @@ function convertTextareasToDivs(root,snap){
     div.style.whiteSpace='normal'; div.style.wordBreak='break-word'; div.style.height=s.height; div.style.overflow='hidden';
     div.innerHTML=(el.value||'').replace(/\n/g,'<br>');
     if(el.id==='hebrew-text'){div.style.direction='rtl';div.style.textAlign='right';}
-    if(el.id==='english-text'){div.style.direction='ltr';div.style.textAlign='right';}
+    if(el.id==='english-text'){div.style.direction='ltr';div.style.textAlign='left';} /* ensure export mirrors UI */
     if(el.id==='header-text'){div.style.textAlign='center';div.style.direction='ltr';}
     if(el.id==='contact-details'){div.style.fontSize='10px';div.style.textAlign='left';}
     el.parentNode.replaceChild(div,el);
